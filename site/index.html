@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#d42b2b" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="description" content="Every event service. One platform. One grand total." />
+    <title>CELEBRATE · Event services, Uganda</title>
+  </head>
+  <body>
+    <div id="root">
+      <!-- First-load screen: shown until the app starts, then replaced by it. -->
+      <style>
+        .splash { position: fixed; inset: 0; display: grid; place-items: center; background: #fffaf0; color: #24140f; font: 700 15px/1.4 system-ui, sans-serif; letter-spacing: 0.08em; }
+        .splash .loader { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        .splash svg { width: 96px; height: 96px; overflow: visible; }
+        .splash .beat { transform-origin: 32px 50px; animation: splash-beat 0.9s ease-in-out infinite; }
+        .splash .spark { animation: splash-spark 0.9s ease-out infinite; }
+        .splash .spark:nth-child(2) { animation-delay: 0.12s; }
+        .splash .spark:nth-child(3) { animation-delay: 0.24s; }
+        @keyframes splash-beat { 0%, 100% { transform: scale(1); } 18% { transform: scale(1.08, 0.9); } 40% { transform: scale(0.97, 1.05); } 60% { transform: scale(1); } }
+        @keyframes splash-spark { 0%, 12% { opacity: 0; transform: translateY(5px); } 35% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-3px); } }
+        @media (prefers-reduced-motion: reduce) { .splash .beat, .splash .spark { animation: none; } }
+      </style>
+      <div class="splash" role="status">
+        <div class="loader">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <circle cx="32" cy="32" r="32" fill="#d42b2b" />
+            <g stroke="#fff7e6" stroke-width="3" stroke-linecap="round">
+              <path class="spark" d="M19.5 10.5l3 6" />
+              <path class="spark" d="M32 7v7" />
+              <path class="spark" d="M44.5 10.5l-3 6" />
+            </g>
+            <g class="beat">
+              <path d="M17 27l5 23q10 6 20 0l5-23z" fill="#f2b31c" />
+              <path d="M19.5 31l4.5 19 4-19 4 21 4-21 4 19 4.5-19" fill="none" stroke="#24140f" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" />
+              <ellipse cx="32" cy="27" rx="15" ry="5.5" fill="#fff7e6" />
+            </g>
+          </svg>
+          <span>CELEBRATE</span>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

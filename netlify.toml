@@ -1,0 +1,19 @@
+# Netlify hosts the website (site/) and runs the API as a function.
+[build]
+  command = "npm run build:site"
+  publish = "site/dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Every other address is a page inside the React app.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

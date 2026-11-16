@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Celebrate">
+  <circle cx="32" cy="32" r="32" fill="#d42b2b"/>
+  <g stroke="#fff7e6" stroke-width="3" stroke-linecap="round">
+    <path d="M32 7v7M19.5 10.5l3 6M44.5 10.5l-3 6"/>
+  </g>
+  <path d="M17 27l5 23q10 6 20 0l5-23z" fill="#f2b31c"/>
+  <path d="M19.5 31l4.5 19 4-19 4 21 4-21 4 19 4.500-19" fill="none" stroke="#24140f" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/>
+  <ellipse cx="32" cy="27" rx="15" ry="5.500" fill="#fff7e6"/>
+</svg>
