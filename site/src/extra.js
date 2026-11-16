@@ -1,12 +1,26 @@
 // Calls the website makes beyond the ones it shares with the phone app (src/api.js).
+// Every call carries the signed-in customer's token, when there is one.
+import { customerToken } from "./account.jsx";
+
+/** Thrown when the server could not be reached at all, as opposed to answering "no". */
+export class Offline extends Error {}
+/** Thrown when the server says the sign-in has run out or is not good. */
+export class NotSignedIn extends Error {}
+
 async function request(path, data) {
+  const token = customerToken();
   let response;
   try {
-    response = await fetch(`/api${path}`, data && { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    response = await fetch(`/api${path}`, {
+      method: data ? "POST" : "GET",
+      headers: { "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }) },
+      body: data && JSON.stringify(data),
+    });
   } catch {
-    throw new Error("We could not reach the server. Check your connection and try again.");
+    throw new Offline("We could not reach the server. Check your connection and try again.");
   }
   const body = await response.json().catch(() => null);
+  if (response.status === 401) throw new NotSignedIn(body?.error ?? "Please sign in again.");
   if (!response.ok) throw new Error(body?.error ?? "Something went wrong. Please try again.");
   return body;
 }
@@ -17,7 +31,15 @@ export const more = {
   month: (id, month) => request(`/services/${encodeURIComponent(id)}/availability?month=${month}`),
   pledges: (key) => request(`/pledges/${key}`),
   pledge: (key, data) => request(`/pledges/${key}`, data),
-  login: (data) => request("/login", data),
+  register: (data) => request("/customers/register", data),
+  signIn: (data) => request("/customers/login", data),
+  me: () => request("/me"),
+  updateMe: (data) => request("/me", data),
+  myBookings: () => request("/me/bookings"),
+  myVisits: () => request("/me/appointments"),
+  book: (data) => request("/bookings", data),
+  booking: (id) => request(`/bookings/${encodeURIComponent(id)}`),
+  verify: (id) => request(`/bookings/${encodeURIComponent(id)}/verify`),
   payBalance: (id, payment) => request(`/bookings/${id}/balance`, { payment }),
   messages: (id) => request(`/bookings/${id}/messages`),
   sendMessage: (id, serviceId, text) => request(`/bookings/${id}/messages`, { serviceId, text }),
@@ -29,27 +51,8 @@ export const more = {
   reviews: (id) => request(`/services/${encodeURIComponent(id)}/reviews`),
 };
 
-// The appointments made in this browser, by id. Without accounts, this is how "my appointments" is known.
-const VISITS = "celebrate.visits.v1";
-export const localVisits = {
-  ids() {
-    try {
-      const list = JSON.parse(localStorage.getItem(VISITS));
-      return Array.isArray(list) ? list.map(String) : [];
-    } catch {
-      return [];
-    }
-  },
-  add(id) {
-    try {
-      localStorage.setItem(VISITS, JSON.stringify([...new Set([id, ...localVisits.ids()])].slice(0, 50)));
-    } catch {
-      // The appointment is still made; it just will not be listed on this device.
-    }
-  },
-};
-
-// Bookings made in this browser are also kept here, so receipts still open if the server forgets them.
+// The signed-in customer's bookings are also kept in this browser, so receipts still open offline.
+// Cleared on signing out.
 const KEY = "celebrate.bookings.v1";
 export const localBookings = {
   all() {
@@ -61,6 +64,13 @@ export const localBookings = {
     }
   },
   get: (id) => localBookings.all().find((booking) => booking.id === id) ?? null,
+  clear() {
+    try {
+      localStorage.removeItem(KEY);
+    } catch {
+      // Nothing to clear.
+    }
+  },
   save(booking) {
     try {
       localStorage.setItem(KEY, JSON.stringify([booking, ...localBookings.all().filter((b) => b.id !== booking.id)].slice(0, 30)));

@@ -10,16 +10,19 @@ import App from "./App.jsx";
 import { PlanProvider } from "../../src/plan.jsx";
 import { LangProvider } from "./i18n.jsx";
 import { CompareProvider } from "./compare.jsx";
+import { AccountProvider } from "./account.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <LangProvider>
-        <PlanProvider>
-          <CompareProvider>
-            <App />
-          </CompareProvider>
-        </PlanProvider>
+        <AccountProvider>
+          <PlanProvider>
+            <CompareProvider>
+              <App />
+            </CompareProvider>
+          </PlanProvider>
+        </AccountProvider>
       </LangProvider>
     </BrowserRouter>
   </React.StrictMode>

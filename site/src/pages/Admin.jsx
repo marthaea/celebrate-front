@@ -4,7 +4,7 @@ import { formatDate, money } from "../../../src/format.js";
 import { session, SignedOut, staff } from "../staff.js";
 import { ErrorNote, Loading, StaffSignIn } from "../components.jsx";
 
-const TABS = ["Overview", "Vendors", "Payments", "Appointments", "Reviews"];
+const TABS = ["Overview", "Vendors", "Customers", "Payments", "Appointments", "Reviews"];
 const stateClass = (status) => (["approved", "Confirmed"].includes(status) ? "confirmed" : ["pending", "Waiting", "Requested"].includes(status) ? "waiting" : "off");
 
 function AddVendor({ meta, onAdd }) {
@@ -28,6 +28,61 @@ function AddVendor({ meta, onAdd }) {
       </div>
       <button className="button fit">Add business</button>
     </form>
+  );
+}
+
+/** Customer accounts: who has signed up, what they have booked and paid, and suspending or resetting them. */
+function Customers({ call, act, version }) {
+  const { data, error, loading } = useLoad(() => call("/admin/customers"), [version]);
+  const [search, setSearch] = useState("");
+  const setPassword = (customer) => {
+    const password = window.prompt(`New password for ${customer.name} (at least 8 characters). Check it is really them first, then tell them yourself.`);
+    if (password) act(`/admin/customers/${customer.id}`, { action: "password", password });
+  };
+  if (loading && !data) return <Loading />;
+  if (!data) return <ErrorNote>{error}</ErrorNote>;
+  const words = search.trim().toLowerCase().replace(/\s+/g, "");
+  const shown = data.filter((c) => !words || (c.name + c.phone).toLowerCase().replace(/\s+/g, "").includes(words));
+
+  return (
+    <section className="desk-list">
+      <div className="tiles">
+        <div><p className="tile-number">{data.length}</p><p>customer accounts</p></div>
+        <div><p className="tile-number">{data.filter((c) => c.bookings).length}</p><p>have booked</p></div>
+        <div><p className="tile-number">{data.filter((c) => c.status !== "active").length}</p><p>suspended</p></div>
+      </div>
+      <label className="field">
+        <span className="caps">Find a customer</span>
+        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or phone number" />
+      </label>
+      {shown.length === 0 && <p className="quiet">{data.length ? "No one matches." : "No customer accounts yet."}</p>}
+      {shown.length > 0 && (
+        <div className="table-scroll">
+          <table className="desk-table">
+            <thead><tr><th>Customer</th><th>Status</th><th>Bookings</th><th>Paid</th><th>Still owing</th><th>Appointments</th><th>Actions</th></tr></thead>
+            <tbody>
+              {[...shown].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((c) => (
+                <tr key={c.id}>
+                  <th scope="row">{c.name}<small>{c.phone} · joined {formatDate(c.createdAt.slice(0, 10))}</small></th>
+                  <td><span className={`state ${c.status === "active" ? "confirmed" : "off"}`}>{c.status}</span></td>
+                  <td>{c.bookings}</td>
+                  <td>{money(c.spent)}</td>
+                  <td>{c.owing ? money(c.owing) : "–"}</td>
+                  <td>{c.appointments}</td>
+                  <td className="row-actions">
+                    {c.status === "active"
+                      ? <button className="link-quiet" onClick={() => window.confirm(`Suspend ${c.name}? They will be signed out and cannot sign in.`) && act(`/admin/customers/${c.id}`, { action: "suspend" })}>Suspend</button>
+                      : <button className="link-quiet" onClick={() => act(`/admin/customers/${c.id}`, { action: "restore" })}>Restore</button>}
+                    <button className="link-quiet" onClick={() => setPassword(c)}>Reset password</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="quiet">Phone numbers are for Celebrate only: never pass them to vendors.</p>
+    </section>
   );
 }
 
@@ -164,6 +219,8 @@ function Desk({ who, onSignOut }) {
           <AddVendor meta={meta.data} onAdd={(form) => act("/admin/vendors", form)} />
         </section>
       )}
+
+      {tab === "Customers" && <Customers call={call} act={act} version={version} />}
 
       {tab === "Payments" && (
         <section className="desk-list">

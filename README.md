@@ -115,7 +115,7 @@ Netlify (`netlify/functions/api.js`). Replace it with a database when the real b
 | Messages with vendors | receipt page, per vendor | Phone numbers and email addresses are removed from messages (`hideContacts` in `server/extras.js`). Vendors have no inbox yet, so only the customer's side is delivered. |
 | Appointments | "before you book" on each service; listed under Bookings | Tastings, fittings, viewings; the kind comes from the category (`visit` in `server/data.js`). |
 | Privacy page | `/privacy` | A draft: needs legal review and contact details before launch. |
-| Login check | log in page | Cloudflare Turnstile. |
+| Sign-in check | sign-in pages | Cloudflare Turnstile, on customer, vendor and admin sign-in and on vendor applications. |
 
 ### Turning on the real Cloudflare check
 
@@ -152,5 +152,26 @@ Set these on the host (Netlify: **Site configuration → Environment variables**
 - `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`: see above. Vendor and admin sign-in and vendor
   applications all go through the same Cloudflare check.
 
-Still to come with the real backend: customer accounts (a booking is reached by its receipt number,
-not a login), vendors adding their own listings, and moving real money.
+Still to come with the real backend: vendors adding their own listings, password reset by SMS, and
+moving real money.
+
+## Customer accounts
+
+Customers sign up and sign in with their name, a Ugandan mobile number and a password, through the
+same Cloudflare check (`server/customers.js`, page `/account`). Sign-ins last 30 days on that browser.
+
+- Paying needs an account: the pay page sends signed-out visitors to sign in first and back again.
+- A booking made while signed in belongs to that account. Only its owner can open the receipt, message
+  its vendors, pay the balance or leave reviews. A stranger with the receipt number is refused.
+- Requesting a tasting, fitting or viewing needs an account; the vendor sees the account's name.
+- `/bookings` lists the account's bookings and appointments; `/account` changes the name or password
+  and signs out (which also clears this browser's copy of the bookings).
+- Vendors never see a customer's phone number. A vendor scanning a receipt's QR code sees what was
+  booked, whether it is paid and the customer's first name (`/api/bookings/:id/verify`).
+- The admin dashboard has a **Customers** section: search, see bookings and payments per account,
+  suspend or restore an account, and reset a forgotten password after checking it is really them.
+- Bookings made without an account (the earlier phone-app version still makes those) stay reachable
+  by receipt number, as before.
+
+Sign-in code shared by customers, vendors and the admin (password hashing, signed tokens, the
+Cloudflare check) is in `server/auth.js`.

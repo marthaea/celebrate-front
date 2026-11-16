@@ -3,19 +3,19 @@ import { api, useLoad } from "../../../src/api.js";
 import { discountPercent, formatDate, money } from "../../../src/format.js";
 import { usePlan } from "../../../src/plan.jsx";
 import { Art, Calendar, ErrorNote, Loading } from "../components.jsx";
-import { localVisits, more } from "../extra.js";
+import { more } from "../extra.js";
+import { useAccount } from "../account.jsx";
 import { useState } from "react";
 import { toISODate } from "../../../src/format.js";
 import { useT } from "../i18n.jsx";
 
 /** Books a tasting, fitting or viewing with the vendor. Contact stays on the site: no phone numbers are swapped. */
 function Visit({ service, kind }) {
-  const plan = usePlan();
+  const { customer } = useAccount();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const [date, setDate] = useState(toISODate(tomorrow));
   const [time, setTime] = useState("");
-  const [name, setName] = useState(plan.name);
   const [error, setError] = useState("");
   const [booked, setBooked] = useState(null);
   const [sending, setSending] = useState(false);
@@ -26,8 +26,7 @@ function Visit({ service, kind }) {
     setError("");
     setSending(true);
     try {
-      const visit = await more.bookVisit({ serviceId: service.id, date, time, name });
-      localVisits.add(visit.id);
+      const visit = await more.bookVisit({ serviceId: service.id, date, time });
       setBooked(visit);
       setTime("");
     } catch (err) {
@@ -51,10 +50,10 @@ function Visit({ service, kind }) {
             <span className="caps">Date</span>
             <input type="date" min={toISODate(tomorrow)} value={date} onChange={(e) => { setDate(e.target.value); setTime(""); }} />
           </label>
-          <label className="field">
-            <span className="caps">Your name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="name" placeholder="e.g. Nantongo" />
-          </label>
+          <div className="field">
+            <span className="caps">Who is coming</span>
+            <p className="field-value">{customer ? customer.name : "Sign in first"}</p>
+          </div>
         </div>
         <fieldset className="slots">
           <legend className="caps">Time</legend>
@@ -66,7 +65,9 @@ function Visit({ service, kind }) {
           ))}
         </fieldset>
         <ErrorNote>{error || slots.error}</ErrorNote>
-        <button className="button outline" disabled={sending || !time}>{sending ? "Sending…" : `Request ${kind.toLowerCase()}`}</button>
+        {customer
+          ? <button className="button outline" disabled={sending || !time}>{sending ? "Sending…" : `Request ${kind.toLowerCase()}`}</button>
+          : <Link className="button outline" to={`/account?next=/service/${service.id}`}>Sign in to request a {kind.toLowerCase()}</Link>}
       </form>
     </section>
   );

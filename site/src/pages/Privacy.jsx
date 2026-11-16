@@ -5,7 +5,8 @@ const SECTIONS = [
   {
     title: "What we collect",
     points: [
-      "Your name, when you log in, book an appointment or make a pledge.",
+      "Your name, mobile number and password, when you open an account. The password is stored scrambled (hashed), so no one at Celebrate can read it.",
+      "The name given when someone makes a pledge on a shared plan.",
       "Your event details: the type of event, date, district, number of guests and the services you choose.",
       "Your mobile money number, only when you pay with mobile money. We never see or store your PIN, and we do not store card numbers.",
       "Messages you send to vendors through Celebrate.",
@@ -15,7 +16,7 @@ const SECTIONS = [
   {
     title: "What stays on your own device",
     points: [
-      "Your plan, your language choice, your budget, your checklist ticks and a copy of your bookings are kept in your browser so the site works on a poor connection. Clearing your browser data removes them.",
+      "Your plan, your language choice, your budget, your checklist ticks, your sign-in and a copy of your bookings are kept in your browser so the site works on a poor connection. Signing out removes the sign-in and the copy of your bookings; clearing your browser data removes the rest.",
       "We do not use advertising or tracking cookies.",
     ],
   },
@@ -25,13 +26,15 @@ const SECTIONS = [
       "To work out your grand total, take your booking and tell the vendors you chose.",
       "To let you and your vendors arrange the event through messages and appointments.",
       "To show a shared plan and its pledges to the people you send the link to.",
-      "To check, with Cloudflare Turnstile, that a login comes from a person and not an automated program.",
+      "To check, with Cloudflare Turnstile, that a sign-in comes from a person and not an automated program.",
     ],
   },
   {
     title: "Who sees it",
     points: [
-      "The vendors on your booking see your name, your event details and the messages you send them.",
+      "The vendors on your booking see your name, your event details and the messages you send them. They never see your mobile number.",
+      "Your bookings, receipts, messages and appointments can only be opened when you are signed in to your account. A vendor scanning your receipt's QR code sees what was booked and whether it is paid, and your first name.",
+      "The Celebrate team can see your account, bookings and payments, to run the service and to help you, for example by resetting a forgotten password after checking it is you.",
       "Vendors and customers do not receive each other's phone numbers or email addresses. Phone numbers and email addresses typed into a message are removed before it is delivered.",
       "Anyone with the link to a shared plan can see that plan and the pledges made to it. Share the link only with people you trust.",
       "Cloudflare receives technical details about your browser when it runs the login check, under its own privacy policy.",

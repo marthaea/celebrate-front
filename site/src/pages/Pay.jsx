@@ -4,11 +4,13 @@ import { api, useLoad } from "../../../src/api.js";
 import { money } from "../../../src/format.js";
 import { usePlan } from "../../../src/plan.jsx";
 import { ErrorNote, Loading, PageHead, Summary } from "../components.jsx";
-import { localBookings } from "../extra.js";
+import { localBookings, more } from "../extra.js";
+import { useAccount } from "../account.jsx";
 import { useT } from "../i18n.jsx";
 
 export default function Pay() {
   const plan = usePlan();
+  const { customer } = useAccount();
   const t = useT();
   const navigate = useNavigate();
   const { event, items } = plan;
@@ -20,6 +22,8 @@ export default function Pay() {
   const [paying, setPaying] = useState(false);
 
   if (!items.length && !paying) return <Navigate to="/plan" replace />;
+  // Paying needs an account, so the booking, its receipt and its messages belong to someone.
+  if (!customer && !paying) return <Navigate to="/account?next=/pay" replace />;
 
   const chosen = meta.data?.paymentMethods.find((m) => m.id === method);
   const total = quote.data?.total;
@@ -31,7 +35,7 @@ export default function Pay() {
     setError("");
     setPaying(true);
     try {
-      const booking = await api.book({ event, items, payment: { method, phone }, customer: plan.name, deposit: true });
+      const booking = await more.book({ event, items, payment: { method, phone }, deposit: true });
       localBookings.save(booking);
       plan.clearItems();
       navigate(`/receipt/${booking.id}`, { replace: true, state: { fresh: true } });

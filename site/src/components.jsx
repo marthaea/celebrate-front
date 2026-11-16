@@ -9,6 +9,7 @@ import { discountPercent, money } from "../../src/format.js";
 import { usePlan } from "../../src/plan.jsx";
 import { PHOTOS } from "./photos.js";
 import { useLang, useT } from "./i18n.jsx";
+import { useAccount } from "./account.jsx";
 import { COMPARE_LIMIT, useCompare } from "./compare.jsx";
 
 const ICONS = {
@@ -61,6 +62,7 @@ export function Logo({ className = "" }) {
 export function Header({ overHero }) {
   const { items } = usePlan();
   const { lang, setLang, t } = useLang();
+  const { customer } = useAccount();
   const navigate = useNavigate();
   const [atTop, setAtTop] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -96,7 +98,7 @@ export function Header({ overHero }) {
         <button className="lang" onClick={() => setLang(lang === "en" ? "lg" : "en")} aria-label={lang === "en" ? "Kyusa olulimi: Luganda" : "Change language: English"}>
           <span className={lang === "en" ? "on" : ""}>EN</span><span className={lang === "lg" ? "on" : ""}>LG</span>
         </button>
-        <NavLink to="/account" className="hide-small">{t("Account")}</NavLink>
+        <NavLink to="/account" className="hide-small">{customer ? customer.name.split(" ")[0] : t("Log in")}</NavLink>
         <NavLink to="/bookings" className="hide-small">{t("Bookings")}</NavLink>
         <NavLink to="/plan" className="plan-pill"><span className="hide-tiny">{t("My plan")}</span> <span className="count">{items.length}</span></NavLink>
       </nav>

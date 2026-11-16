@@ -291,6 +291,7 @@ main { min-height: 70vh; }
 .visits { width: 100%; display: flex; flex-direction: column; gap: 14px; margin-top: 28px; text-align: left; }
 .visit-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .human-check { min-height: 65px; }
+.field-value { min-height: 50px; display: flex; align-items: center; font-size: 17px; font-weight: 500; }
 
 /* Vendor workspace and admin dashboard */
 .desk { display: flex; flex-direction: column; gap: 28px; }

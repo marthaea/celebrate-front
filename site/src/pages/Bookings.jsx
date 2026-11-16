@@ -1,31 +1,43 @@
 import { Link } from "react-router-dom";
-import { api, useLoad } from "../../../src/api.js";
+import { useLoad } from "../../../src/api.js";
 import { formatDate, money } from "../../../src/format.js";
 import { ErrorNote, Loading, PageHead } from "../components.jsx";
 import { useState } from "react";
-import { daysUntil, localBookings, localVisits, more } from "../extra.js";
+import { daysUntil, localBookings, more, Offline } from "../extra.js";
+import { useAccount } from "../account.jsx";
 import { useT } from "../i18n.jsx";
 
 export default function Bookings() {
   const t = useT();
-  // The server's list, plus any bookings made in this browser that the server no longer has.
+  const { customer } = useAccount();
+  // The account's bookings from the server; offline, the copies kept in this browser.
   const { data, error, loading } = useLoad(async () => {
-    const mine = localBookings.all();
+    if (!customer) return [];
     try {
-      const all = await api.bookings();
-      return [...all, ...mine.filter((b) => !all.some((x) => x.id === b.id))];
+      return await more.myBookings();
     } catch (problem) {
-      if (mine.length) return mine;
+      const mine = localBookings.all();
+      if (problem instanceof Offline && mine.length) return mine;
       throw problem;
     }
-  }, []);
-  const ids = localVisits.ids();
+  }, [customer?.id]);
   const [changed, setChanged] = useState(0);
-  const visits = useLoad(() => (ids.length ? more.visits(ids) : Promise.resolve([])), [changed]);
+  const visits = useLoad(() => (customer ? more.myVisits() : Promise.resolve([])), [changed, customer?.id]);
   const cancel = async (visitId) => {
     await more.cancelVisit(visitId).catch(() => {});
     setChanged(changed + 1);
   };
+
+  if (!customer) {
+    return (
+      <div className="page centre-page">
+        <PageHead eyebrow={t("Bookings")} title={t("Your events")}>
+          <p className="quiet">Sign in to see your bookings, receipts, messages with vendors and appointments.</p>
+        </PageHead>
+        <Link to="/account?next=/bookings" className="button fit">{t("Log in")}</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="page centre-page wide">
@@ -40,7 +52,7 @@ export default function Bookings() {
       )}
       {data && data.length > 0 && (
         <ul className="lines bookings">
-          {data.map((booking) => {
+          {[...data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((booking) => {
             const waiting = booking.vendors.filter((v) => v.status !== "Confirmed").length;
             return (
               <li key={booking.id}>

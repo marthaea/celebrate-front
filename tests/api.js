@@ -8,10 +8,25 @@ const server = app.listen(0);
 const base = `http://localhost:${server.address().port}/api`;
 test.after(() => server.close());
 
-const call = async (path, data) => {
-  const response = await fetch(base + path, data && { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+const request = async (path, data, token) => {
+  const response = await fetch(base + path, {
+    method: data ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }) },
+    body: data && JSON.stringify(data),
+  });
   return { status: response.status, body: await response.json() };
 };
+const call = (path, data) => request(path, data);
+
+// Customer accounts. Signing up through the API needs Cloudflare, so tests create accounts directly.
+const { createCustomer } = await import("../server/customers.js");
+const { makeToken: tokenFor } = await import("../server/auth.js");
+let phoneCounter = 100000;
+async function newCustomer(name = "Nantongo") {
+  const { customer } = await createCustomer({ name, phone: `0770${phoneCounter++}`, password: "a long password" });
+  const token = tokenFor({ role: "customer", customer: customer.id }, 1);
+  return { customer, token, call: (path, data) => request(path, data, token) };
+}
 
 const items = ["lakeside-hall-gardens", "draped-tent-100", "buffet", "pa-dj", "photo-full-day"];
 const date = nextFreeDate(items, "2027-03-01");
@@ -60,18 +75,78 @@ test("an appointment takes its time slot, and cancelling frees it", async () => 
   const before = (await call(`/services/bridal-gown/slots?date=${day}`)).body;
   assert.equal(before.kind, "Fitting");
   assert.equal(before.free.length, 7);
-  const visit = await call("/appointments", { serviceId: "bridal-gown", date: day, time: "10:00", name: "Nantongo" });
+  assert.equal((await call("/appointments", { serviceId: "bridal-gown", date: day, time: "10:00" })).status, 401);
+  const bride = await newCustomer("Nantongo");
+  const visit = await bride.call("/appointments", { serviceId: "bridal-gown", date: day, time: "10:00" });
   assert.equal(visit.status, 201);
-  assert.equal((await call("/appointments", { serviceId: "bridal-gown", date: day, time: "10:00", name: "Other" })).status, 409);
+  assert.equal(visit.body.name, "Nantongo");
+  const other = await newCustomer("Other");
+  assert.equal((await other.call("/appointments", { serviceId: "bridal-gown", date: day, time: "10:00" })).status, 409);
   assert.equal((await call(`/services/bridal-gown/slots?date=${day}`)).body.free.length, 6);
-  assert.equal((await call("/appointments", { serviceId: "bridal-gown", date: "2020-01-01", time: "10:00", name: "A" })).status, 400);
-  await call(`/appointments/${visit.body.id}/cancel`, {});
+  assert.equal((await bride.call("/appointments", { serviceId: "bridal-gown", date: "2020-01-01", time: "10:00" })).status, 400);
+  assert.equal((await other.call(`/appointments/${visit.body.id}/cancel`, {})).status, 404);
+  assert.deepEqual((await other.call(`/appointments?ids=${visit.body.id}`)).body, []);
+  assert.equal((await bride.call("/me/appointments")).body.length, 1);
+  await bride.call(`/appointments/${visit.body.id}/cancel`, {});
   assert.equal((await call(`/services/bridal-gown/slots?date=${day}`)).body.free.length, 7);
 });
 
-test("logging in needs a name and the security check", async () => {
-  assert.equal((await call("/login", { name: "", token: "x" })).status, 400);
-  assert.equal((await call("/login", { name: "Nantongo", token: "" })).status, 400);
+test("signing up and in need the security check", async () => {
+  assert.equal((await call("/customers/register", { name: "A", phone: "0770 000 001", password: "long enough", token: "" })).status, 400);
+  assert.equal((await call("/customers/login", { phone: "0770 000 001", password: "long enough", token: "" })).status, 400);
+});
+
+test("accounts check the phone number and password, and refuse a second account for one number", async () => {
+  const { normalisePhone } = await import("../server/customers.js");
+  assert.equal(normalisePhone("0770 123 456"), "256770123456");
+  assert.equal(normalisePhone("+256 770-123456"), "256770123456");
+  assert.equal(normalisePhone("0414 123 456"), null);
+  assert.equal((await createCustomer({ name: "A", phone: "12345", password: "long enough" })).status, 400);
+  assert.equal((await createCustomer({ name: "A", phone: "0781 000 000", password: "short" })).status, 400);
+  const made = await createCustomer({ name: "Akello", phone: "0781 000 000", password: "long enough" });
+  assert.equal(made.customer.phone, "256781000000");
+  assert.ok(!made.customer.passHash.includes("long enough"));
+  assert.equal((await createCustomer({ name: "Someone", phone: "+256781000000", password: "long enough" })).status, 409);
+});
+
+test("a booking made while signed in belongs to that account alone", async () => {
+  const owner = await newCustomer("Nakato");
+  const stranger = await newCustomer("Stranger");
+  const day = nextFreeDate(["juice-station"], "2027-06-01");
+  const { body: booking } = await owner.call("/bookings", { event: { ...event, date: day }, items: ["juice-station"], payment, customer: "Someone else", deposit: true });
+  assert.equal(booking.customer, "Nakato");
+  assert.equal(booking.customerId, owner.customer.id);
+
+  assert.equal((await owner.call(`/bookings/${booking.id}`)).status, 200);
+  for (const who of [call, stranger.call]) {
+    assert.equal((await who(`/bookings/${booking.id}`)).status, 403);
+    assert.equal((await who(`/bookings/${booking.id}/messages`)).status, 403);
+    assert.equal((await who(`/bookings/${booking.id}/messages`, { serviceId: "juice-station", text: "hi" })).status, 403);
+    assert.equal((await who(`/bookings/${booking.id}/balance`, { payment })).status, 403);
+  }
+  assert.ok(!(await call("/bookings")).body.some((b) => b.id === booking.id));
+  assert.deepEqual((await owner.call("/me/bookings")).body.map((b) => b.id), [booking.id]);
+  assert.deepEqual((await stranger.call("/me/bookings")).body, []);
+
+  // A vendor scanning the QR code still sees that it is genuine, without the customer's details.
+  const check = await call(`/bookings/${booking.id}/verify`);
+  assert.equal(check.status, 200);
+  assert.equal(check.body.customerId, undefined);
+  assert.equal(check.body.customer, "Nakato");
+
+  assert.equal((await owner.call(`/bookings/${booking.id}/balance`, { payment })).status, 200);
+  assert.equal((await stranger.call(`/bookings/${booking.id}/reviews`, { serviceId: "juice-station", rating: 1 })).status, 403);
+  assert.equal((await owner.call(`/bookings/${booking.id}/reviews`, { serviceId: "juice-station", rating: 5 })).status, 201);
+});
+
+test("customers change their own details, and a suspended account stops working", async () => {
+  const me = await newCustomer("Kato");
+  assert.equal((await me.call("/me")).body.name, "Kato");
+  assert.equal((await me.call("/me")).body.passHash, undefined);
+  assert.equal((await me.call("/me", { name: "Kato Moses" })).body.name, "Kato Moses");
+  assert.equal((await me.call("/me", { password: "wrong one", newPassword: "another long one" })).status, 401);
+  assert.equal((await me.call("/me", { password: "a long password", newPassword: "another long one" })).status, 200);
+  assert.equal((await call("/me")).status, 401);
 });
 
 // ---- Vendors, admin and reviews. Sign-in itself needs Cloudflare, so these tests mint their own tokens.
@@ -147,11 +222,12 @@ test("a vendor sees and answers only their own bookings, and the customer sees t
 
 test("a vendor approves an appointment for their own service only", async () => {
   const day = nextFreeDate(["buffet"], "2027-02-10");
-  const { body: visit } = await call("/appointments", { serviceId: "buffet", date: day, time: "11:00", name: "Nantongo" });
+  const guest = await newCustomer();
+  const { body: visit } = await guest.call("/appointments", { serviceId: "buffet", date: day, time: "11:00" });
   const tailor = as({ role: "vendor", vendor: "nakato-tailors" });
   assert.equal((await tailor(`/vendor/visits/${visit.id}`, { status: "Confirmed" })).status, 404);
   assert.equal((await caterer(`/vendor/visits/${visit.id}`, { status: "Confirmed" })).status, 200);
-  assert.equal((await call(`/appointments?ids=${visit.id}`)).body[0].status, "Confirmed");
+  assert.equal((await guest.call(`/appointments?ids=${visit.id}`)).body[0].status, "Confirmed");
 });
 
 test("a review needs a finished or fully paid booking, counts once, and moves the rating", async () => {
@@ -189,6 +265,16 @@ test("the admin adds, suspends and restores vendors, and tracks payments", async
   assert.equal((await call("/bookings", { event: { ...event, date: day }, items: ["wedding-cake"], payment })).status, 409);
   await admin("/admin/vendors/sweet-crumbs", { action: "restore" });
   assert.equal((await call("/services/wedding-cake")).status, 200);
+
+  const someone = await newCustomer("Okello");
+  assert.equal((await call("/admin/customers")).status, 401);
+  const listed = (await admin("/admin/customers")).body.find((c) => c.id === someone.customer.id);
+  assert.equal(listed.passHash, undefined);
+  assert.match(listed.phone, /^07\d\d \d{3} \d{3}$/);
+  await admin(`/admin/customers/${someone.customer.id}`, { action: "suspend" });
+  assert.equal((await someone.call("/me")).status, 401);
+  await admin(`/admin/customers/${someone.customer.id}`, { action: "restore" });
+  assert.equal((await someone.call("/me")).status, 200);
 
   const overview = (await admin("/admin/overview")).body;
   assert.equal(overview.totals.collected, overview.bookings.reduce((sum, b) => sum + b.paid, 0));

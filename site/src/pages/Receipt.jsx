@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, useLoad } from "../../../src/api.js";
 import { formatDate, money, toISODate } from "../../../src/format.js";
-import { daysUntil, localBookings, more } from "../extra.js";
+import { daysUntil, localBookings, more, Offline } from "../extra.js";
+import { useAccount } from "../account.jsx";
 import { useT } from "../i18n.jsx";
 import { confetti, drumBeat } from "../party.js";
 import { ErrorNote, Loading, PageHead } from "../components.jsx";
@@ -25,17 +26,18 @@ function dateBefore(iso, days) {
   return toISODate(date);
 }
 
-/** Loads a booking from the server, falling back to the copy kept in this browser. */
+/** Loads a booking from the server, or, when offline, the copy kept in this browser. */
 export function useBooking(id) {
+  const { customer } = useAccount();
   return useLoad(async () => {
     try {
-      return await api.booking(id);
+      return await more.booking(id);
     } catch (error) {
-      const saved = localBookings.get(id);
+      const saved = error instanceof Offline && localBookings.get(id);
       if (saved) return saved;
       throw error;
     }
-  }, [id]);
+  }, [id, customer?.id]);
 }
 
 function Checklist({ booking }) {
@@ -279,6 +281,7 @@ export default function Receipt() {
         <p className="quiet">{t("Thank you")}{booking?.customer ? `, ${booking.customer}` : ""}. Your vendors have been told, and you can follow them here.</p>
       </PageHead>
       <ErrorNote>{error}</ErrorNote>
+      {error && /another account|sign in/i.test(error) && <Link to={`/account?next=/receipt/${id}`} className="button fit">{t("Log in")}</Link>}
       {loading && <Loading />}
       {booking && (
         <div className="receipt">

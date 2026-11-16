@@ -2,12 +2,13 @@ import { Link, useParams } from "react-router-dom";
 import { BadgeCheck, CircleAlert } from "lucide-react";
 import { formatDate, money } from "../../../src/format.js";
 import { Loading, PageHead } from "../components.jsx";
-import { useBooking } from "./Receipt.jsx";
+import { useLoad } from "../../../src/api.js";
+import { more } from "../extra.js";
 
 /** Where a receipt's QR code leads: vendors use it to check that a booking is real. */
 export default function Verify() {
   const { id } = useParams();
-  const { data: booking, error, loading } = useBooking(id);
+  const { data: booking, error, loading } = useLoad(() => more.verify(id), [id]);
 
   if (loading) return <div className="page centre-page"><Loading label="Checking this receipt" /></div>;
   if (error || !booking) {

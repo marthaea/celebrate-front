@@ -1,6 +1,8 @@
 import express from "express";
 import { CATEGORIES, DISTRICTS, EVENT_TYPES, OFFER_IDS, PAYMENT_METHODS, SERVICES, VISIT_TIMES } from "./data.js";
-import { addExtras, readPayment, TURNSTILE } from "./extras.js";
+import { addExtras, readPayment } from "./extras.js";
+import { TURNSTILE } from "./auth.js";
+import { currentCustomer, mayUse } from "./customers.js";
 import { buildQuote, DEPOSIT_RATE, depositFor, PLATFORM_FEE_RATE, validateEvent } from "./pricing.js";
 import { bookedDays, nextFreeDate, unavailable } from "./availability.js";
 import { read, write } from "./store.js";
@@ -131,6 +133,9 @@ app.post("/api/bookings", safe(async (req, res) => {
   const { services, error } = resolveItems(items);
   if (error) return res.status(400).json({ error });
 
+  // Signed in: the booking belongs to the account, and only that account can open it.
+  // Not signed in (the phone-app version): anyone with the receipt number can open it, as before.
+  const owner = await currentCustomer(req);
   const { method, error: paymentError } = readPayment(payment);
   if (paymentError) return res.status(400).json({ error: paymentError });
 
@@ -148,7 +153,8 @@ app.post("/api/bookings", safe(async (req, res) => {
   const booking = {
     id: `CLB-${String(FIRST_RECEIPT + bookings.length).padStart(6, "0")}`,
     createdAt: new Date().toISOString(),
-    customer: String(customer ?? "").slice(0, 60),
+    customer: owner ? owner.name : String(customer ?? "").slice(0, 60),
+    customerId: owner?.id ?? null,
     event,
     quote,
     // With `deposit`, part is paid now and the balance on the day; otherwise everything is paid now.
@@ -167,17 +173,35 @@ app.post("/api/bookings", safe(async (req, res) => {
   res.status(201).json(booking);
 }));
 
-app.get("/api/bookings", safe(async (_req, res) => res.json(await loadBookings())));
+// Bookings without an owner only. A signed-in customer's own bookings come from /api/me/bookings.
+app.get("/api/bookings", safe(async (_req, res) => res.json((await loadBookings()).filter((b) => !b.customerId))));
 
 app.get("/api/bookings/:id", safe(async (req, res) => {
   const booking = (await loadBookings()).find((b) => b.id === req.params.id);
   if (!booking) return res.status(404).json({ error: "We could not find that booking." });
+  if (!(await mayUse(req, booking))) return res.status(403).json({ error: "This booking belongs to another account. Sign in as its owner." });
   res.json(booking);
+}));
+
+// What a vendor scanning a receipt's QR code may see: that the booking is real, what was booked
+// and whether it is paid. Not the customer's phone number or messages.
+app.get("/api/bookings/:id/verify", safe(async (req, res) => {
+  const booking = (await loadBookings()).find((b) => b.id === req.params.id);
+  if (!booking) return res.status(404).json({ error: "We could not find that booking." });
+  const { id, event, quote, total, paid, balance, method, vendors } = booking;
+  res.json({
+    id, total: total ?? paid, paid, balance: balance ?? 0, method,
+    customer: String(booking.customer ?? "").split(" ")[0],
+    event: { type: event.type, date: event.date, district: event.district, guests: event.guests },
+    quote: { lines: quote.lines },
+    vendors,
+  });
 }));
 
 app.get("/api/bookings/:id/receipt", safe(async (req, res) => {
   const booking = (await loadBookings()).find((b) => b.id === req.params.id);
   if (!booking) return res.status(404).json({ error: "We could not find that booking." });
+  if (!(await mayUse(req, booking))) return res.status(403).json({ error: "This booking belongs to another account. Sign in as its owner." });
   const { quote, event } = booking;
   const row = (label, value) => `${label.padEnd(44, " ")}${value.padStart(16, " ")}`;
   const text = [

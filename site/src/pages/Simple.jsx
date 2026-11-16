@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BadgeCheck, CalendarCheck, Wallet } from "lucide-react";
 import { usePlan } from "../../../src/plan.jsx";
 import { api, useLoad } from "../../../src/api.js";
 import { more } from "../extra.js";
 import { staff } from "../staff.js";
+import { useAccount } from "../account.jsx";
 import { Art, ErrorNote, HumanCheck, Mark, PageHead } from "../components.jsx";
 import { useT } from "../i18n.jsx";
 
@@ -25,53 +26,153 @@ function Split({ photo, heading, line, children }) {
   );
 }
 
-export function Account() {
+/** Signing in, or opening an account. `next` is where to go afterwards (the pay page, say). */
+function SignInForm({ next }) {
   const plan = usePlan();
+  const account = useAccount();
   const t = useT();
   const navigate = useNavigate();
   const meta = useLoad(api.meta, []);
-  const [name, setName] = useState(plan.name);
+  const [mode, setMode] = useState("in");
+  const [form, setForm] = useState({ name: plan.name, phone: "", password: "" });
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [tries, setTries] = useState(0);
+  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
   const submit = async (event) => {
     event.preventDefault();
     setError("");
     setSending(true);
     try {
-      const result = await more.login({ name, token });
-      plan.setName(result.name);
-      navigate("/");
+      const result = mode === "in"
+        ? await more.signIn({ phone: form.phone, password: form.password, token })
+        : await more.register({ name: form.name, phone: form.phone, password: form.password, token });
+      account.signIn(result);
+      plan.setName(result.customer.name);
+      navigate(next || "/", { replace: true });
     } catch (err) {
       setError(err.message);
       setSending(false);
-      // A check can be used once, so a failed try needs a fresh one.
+      // A check works once, so a failed try needs a fresh one.
       setToken("");
       setTries(tries + 1);
     }
   };
 
   return (
-    <Split photo="hero-left" heading="Tukusanyukidde." line="Plan the whole celebration in one place and see the full cost before you pay.">
-      <PageHead eyebrow={t("Account")} title={plan.name ? `Welcome back, ${plan.name}` : t("Log in")}>
-        <p className="quiet">Tell us who is planning, and we will greet you and put your name on your bookings.</p>
+    <>
+      <PageHead eyebrow={t("Account")} title={mode === "in" ? t("Log in") : "Create your account"}>
+        <p className="quiet">{next === "/pay" ? "Sign in or create an account to pay. Your plan is kept." : "Your bookings, appointments and messages, on any phone or computer."}</p>
       </PageHead>
+      <div className="toolbar-row" role="group" aria-label="Sign in or create an account">
+        <button type="button" className={mode === "in" ? "active" : ""} aria-pressed={mode === "in"} onClick={() => { setMode("in"); setError(""); }}>I have an account</button>
+        <button type="button" className={mode === "new" ? "active" : ""} aria-pressed={mode === "new"} onClick={() => { setMode("new"); setError(""); }}>I am new here</button>
+      </div>
       <form className="form" onSubmit={submit}>
+        {mode === "new" && (
+          <label className="field">
+            <span className="caps">{t("Your name")}</span>
+            <input value={form.name} onChange={set("name")} placeholder="e.g. Nantongo" autoComplete="name" maxLength={40} required />
+          </label>
+        )}
         <label className="field">
-          <span className="caps">{t("Your name")}</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Nantongo" autoComplete="given-name" maxLength={40} required />
+          <span className="caps">Mobile number</span>
+          <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="0770 123 456" autoComplete="tel" maxLength={16} required />
+          {mode === "new" && <small className="quiet">Only Celebrate sees it. Vendors never get your number.</small>}
+        </label>
+        <label className="field">
+          <span className="caps">Password</span>
+          <input type="password" value={form.password} onChange={set("password")} autoComplete={mode === "in" ? "current-password" : "new-password"} minLength={mode === "new" ? 8 : undefined} required />
+          {mode === "new" && <small className="quiet">At least 8 characters.</small>}
         </label>
         <div className="field">
           <span className="caps">Security check</span>
           <HumanCheck siteKey={meta.data?.turnstile.siteKey} onToken={setToken} onProblem={setError} resetKey={tries} />
-          <small className="quiet">Cloudflare confirms you are a person before you are let in.{meta.data?.turnstile.test ? " Running with Cloudflare's test keys, which always pass." : ""}</small>
+          <small className="quiet">Cloudflare confirms you are a person.{meta.data?.turnstile.test ? " Running with Cloudflare's test keys, which always pass." : ""}</small>
         </div>
         <ErrorNote>{error || meta.error}</ErrorNote>
-        <button className="button" disabled={!token || sending}>{sending ? "Checking…" : t("Continue")}</button>
-        <p className="aside-note">Accounts are not connected yet: only your name is kept, on this device. See our <Link to="/privacy" className="link-quiet">privacy policy</Link>.</p>
+        <button className="button" disabled={!token || sending}>{sending ? "Checking…" : mode === "in" ? t("Log in") : "Create account"}</button>
+        {mode === "in" && <p className="quiet">Forgotten your password? Contact Celebrate and we will reset it after checking it is you.</p>}
+        <p className="aside-note">See how we look after your details in our <Link to="/privacy" className="link-quiet">privacy policy</Link>.</p>
       </form>
+    </>
+  );
+}
+
+/** The signed-in customer's details: change the name or password, or sign out. */
+function Profile() {
+  const account = useAccount();
+  const plan = usePlan();
+  const navigate = useNavigate();
+  const { customer } = account;
+  const [name, setName] = useState(customer.name);
+  const [passwords, setPasswords] = useState({ password: "", newPassword: "" });
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  const save = async (data, done) => {
+    setError("");
+    setNote("");
+    try {
+      const updated = await more.updateMe(data);
+      account.update(updated);
+      plan.setName(updated.name);
+      setNote(done);
+      setPasswords({ password: "", newPassword: "" });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const signOut = () => {
+    account.signOut();
+    plan.setName("");
+    navigate("/");
+  };
+
+  return (
+    <>
+      <PageHead eyebrow="Account" title={`Welcome, ${customer.name}`}>
+        <p className="quiet">Signed in with {customer.phone}. Member since {new Date(customer.createdAt).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}.</p>
+      </PageHead>
+      <div className="vendor-actions">
+        <Link className="chip" to="/bookings">My bookings</Link>
+        <Link className="chip" to="/bookings#visits">My appointments</Link>
+        <Link className="chip" to="/plan">My plan</Link>
+      </div>
+      {note && <p className="aside-note" role="status">{note}</p>}
+      <ErrorNote>{error}</ErrorNote>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); save({ name }, "Your name is saved."); }}>
+        <label className="field">
+          <span className="caps">Your name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="name" required />
+        </label>
+        <button className="button outline" disabled={name.trim() === customer.name}>Save name</button>
+      </form>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); save(passwords, "Your password is changed."); }}>
+        <label className="field">
+          <span className="caps">Current password</span>
+          <input type="password" value={passwords.password} onChange={(e) => setPasswords({ ...passwords, password: e.target.value })} autoComplete="current-password" required />
+        </label>
+        <label className="field">
+          <span className="caps">New password</span>
+          <input type="password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} autoComplete="new-password" minLength={8} required />
+        </label>
+        <button className="button outline">Change password</button>
+      </form>
+      <button className="button" onClick={signOut}>Sign out</button>
+    </>
+  );
+}
+
+export function Account() {
+  const { customer } = useAccount();
+  const [params] = useSearchParams();
+  const next = params.get("next");
+  return (
+    <Split photo="hero-left" heading="Tukusanyukidde." line="Plan the whole celebration in one place and see the full cost before you pay.">
+      {customer ? <Profile /> : <SignInForm next={next?.startsWith("/") && !next.startsWith("//") ? next : ""} />}
       <p className="quiet">Run an events business? <Link to="/vendors" className="link-quiet">List it on Celebrate</Link></p>
     </Split>
   );
