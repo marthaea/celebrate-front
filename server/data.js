@@ -2,11 +2,19 @@
 
 // Neutral names, so no one community's word stands for everyone's ceremony. Each community's own
 // name (kwanjula, nyom and others) is welcome in the host's notes and in vendors' listings.
-export const EVENT_TYPES = ["Introduction", "Wedding", "Giveaway", "Graduation", "Cultural ceremony", "Party"];
+export const EVENT_TYPES = [
+  "Introduction", "Wedding", "Giveaway", "Graduation", "Cultural ceremony", "Party",
+  "Bridal shower", "Baby shower", "Birthday", "Christening", "Proposal", "Corporate event",
+];
 export const EVENT_NOTES = {
   Introduction: "The traditional introduction or bride-price ceremony, whatever your community calls it.",
   Giveaway: "Sending off the bride from her family's home.",
   "Cultural ceremony": "A clan, coming-of-age or other traditional celebration.",
+  "Bridal shower": "A smaller celebration for the bride, with her closest friends and family.",
+  "Baby shower": "Welcoming a new baby before they arrive, with family and close friends.",
+  Christening: "A baby's naming or dedication, often followed by a family lunch.",
+  Proposal: "Planning the moment itself, from the setting to who is in on the surprise.",
+  "Corporate event": "A launch, conference, team day or office party, planned the same way.",
 };
 // Older plans and bookings used the Luganda word for the introduction.
 export const EVENT_ALIASES = { Kwanjula: "Introduction" };

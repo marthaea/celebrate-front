@@ -13,4 +13,8 @@ export const TEAM = [
   { name: "Team member name", role: "Vendor partnerships", photo: "/team/member-4.svg", bio: "A short line about what they do at Celebrate." },
   { name: "Team member name", role: "Customer care", photo: "/team/member-5.svg", bio: "A short line about what they do at Celebrate." },
   { name: "Team member name", role: "Marketing", photo: "/team/member-6.svg", bio: "A short line about what they do at Celebrate." },
+  { name: "Team member name", role: "Operations", photo: "/team/member-7.svg", bio: "A short line about what they do at Celebrate." },
+  { name: "Team member name", role: "Finance", photo: "/team/member-8.svg", bio: "A short line about what they do at Celebrate." },
+  { name: "Team member name", role: "Trust and safety", photo: "/team/member-9.svg", bio: "A short line about what they do at Celebrate." },
+  { name: "Team member name", role: "Community", photo: "/team/member-10.svg", bio: "A short line about what they do at Celebrate." },
 ];

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" role="img" aria-label="Photo coming soon">
-  <rect width="400" height="500" fill="#fff1d6"/>
-  <circle cx="200" cy="190" r="78" fill="#eddcbd"/>
-  <path d="M60 500c0-92 63-160 140-160s140 68 140 160z" fill="#eddcbd"/>
-  <text x="200" y="470" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="#76655b">PHOTO COMING SOON</text>
+  <rect width="400" height="500" fill="#eaf0e6"/>
+  <circle cx="200" cy="190" r="78" fill="#cfdcc4"/>
+  <path d="M60 500c0-92 63-160 140-160s140 68 140 160z" fill="#cfdcc4"/>
+  <text x="200" y="470" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="2" fill="#6b5a4f">PHOTO COMING SOON</text>
 </svg>

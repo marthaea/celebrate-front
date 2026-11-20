@@ -48,7 +48,7 @@ A host's settings for a service: `{ "menu": "local", "service": "served", "extra
 { "type": "Introduction", "guests": 250, "tents": 6, "date": "2026-12-12", "district": "Mukono",
   "setup": "vendor", "location": "Seeta, behind the church" }
 ```
-`type` is one of the event types in `/api/meta` (Introduction, Wedding, Giveaway, Graduation, Cultural ceremony, Party); the old name `Kwanjula` is still accepted and stored as `Introduction`. `district` is one of the listed districts or any typed place name (letters only, up to 40 characters). `setup`: `vendor` (labour charged) or `self`. `location` is optional, up to 120 characters.
+`type` is one of the event types in `/api/meta` (Introduction, Wedding, Giveaway, Graduation, Cultural ceremony, Party, Bridal shower, Baby shower, Birthday, Christening, Proposal, Corporate event); the old name `Kwanjula` is still accepted and stored as `Introduction`. `district` is one of the listed districts or any typed place name (letters only, up to 40 characters). `setup`: `vendor` (labour charged) or `self`. `location` is optional, up to 120 characters.
 
 **Quote** (the grand total)
 ```json

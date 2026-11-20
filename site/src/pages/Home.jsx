@@ -124,7 +124,7 @@ export default function Home() {
           <Link to="/blog" className="link-caps">All posts</Link>
         </div>
         <ul className="post-grid">
-          {sortedPosts().slice(0, 3).map((post) => <PostCard key={post.slug} post={post} />)}
+          {sortedPosts().slice(0, 3).map((post, index) => <PostCard key={post.slug} post={post} index={index} />)}
         </ul>
       </section>
 
@@ -134,7 +134,7 @@ export default function Home() {
           <Link to="/team" className="link-caps">Our team</Link>
         </div>
         <ul className="team-grid compact">
-          {TEAM.slice(0, 4).map((person, index) => <TeamCard key={index} person={person} short />)}
+          {TEAM.slice(0, 4).map((person, index) => <TeamCard key={index} person={person} index={index} short />)}
         </ul>
       </section>
 

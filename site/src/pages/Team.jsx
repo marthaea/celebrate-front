@@ -1,18 +1,18 @@
 import { Link } from "react-router-dom";
 import { TEAM } from "../team.js";
-import { PageHead } from "../components.jsx";
+import { PageHead, Reveal } from "../components.jsx";
 
-/** One person: photo, name, role and an optional short line. */
-export function TeamCard({ person, short = false }) {
+/** One person: photo, name, role and an optional short line. Each card gets its own accent tint. */
+export function TeamCard({ person, index = 0, short = false }) {
   return (
-    <li className="team-card">
+    <Reveal as="li" index={index} className={`team-card accent-${index % 10}`}>
       <div className="team-photo">
         <img src={person.photo} alt={person.name} loading="lazy" width="400" height="500" />
       </div>
       <p className="team-name">{person.name}</p>
       <p className="caps quiet">{person.role}</p>
       {!short && person.bio && <p className="team-bio quiet">{person.bio}</p>}
-    </li>
+    </Reveal>
   );
 }
 
@@ -23,7 +23,7 @@ export default function Team() {
         <p className="quiet">We are building one place where families anywhere in Uganda can find, compare and book everything for their celebration.</p>
       </PageHead>
       <ul className="team-grid">
-        {TEAM.map((person, index) => <TeamCard key={index} person={person} />)}
+        {TEAM.map((person, index) => <TeamCard key={index} person={person} index={index} />)}
       </ul>
       <section className="intro narrow">
         <h2 className="caps">Work with us</h2>

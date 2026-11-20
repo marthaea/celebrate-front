@@ -311,6 +311,30 @@ export function Loading({ label = "Loading" }) {
 }
 export const ErrorNote = ({ children }) => (children ? <p className="error" role="alert">{children}</p> : null);
 
+/**
+ * Fades and slides an item into place the first time it scrolls into view, then leaves it alone.
+ * Pass `index` to stagger a grid of these a beat apart, and `as` to render something other than a div
+ * (a grid of `<li>`, say). Respects prefers-reduced-motion through the CSS alone.
+ */
+export function Reveal({ as: Tag = "div", index = 0, className = "", children, ...rest }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return undefined;
+    const seen = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setVisible(true); seen.disconnect(); }
+    }, { threshold: 0.15 });
+    seen.observe(node);
+    return () => seen.disconnect();
+  }, []);
+  return (
+    <Tag ref={ref} className={`reveal ${visible ? "in" : ""} ${className}`} style={{ "--d": index }} {...rest}>
+      {children}
+    </Tag>
+  );
+}
+
 export const PageHead = ({ eyebrow, title, children }) => (
   <header className="page-head">
     {eyebrow && <p className="caps">{eyebrow}</p>}

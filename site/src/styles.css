@@ -517,6 +517,7 @@ input[type="range"] { width: 100%; min-height: 0; padding: 0; border: 0; backgro
   * { transition: none !important; }
   .loader .beat, .loader .spark, .fade { animation: none; }
   .art-photo img { transition: none; }
+  .reveal { opacity: 1 !important; transform: none !important; }
 }
 
 /* Sign-up code */
@@ -570,13 +571,32 @@ textarea:focus-visible { border-color: var(--red); box-shadow: 0 0 0 3px rgb(212
 
 .occasion-note { margin-top: 16px; }
 
+/* Reveal: fades a card up into place the first time it scrolls into view (components.jsx). */
+.reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.6s ease, transform 0.6s ease; transition-delay: calc(var(--d, 0) * 90ms); }
+.reveal.in { opacity: 1; transform: none; }
+
 /* Team */
 .team-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px 28px; }
 .team-grid.compact { grid-template-columns: repeat(4, 1fr); }
-.team-card { margin: 0; }
-.team-photo { aspect-ratio: 4 / 5; overflow: hidden; border-radius: 18px; background: var(--paper); margin-bottom: 14px; }
+.team-card { margin: 0; --accent: var(--mustard); }
+.team-card.accent-0 { --accent: #f2b31c; }
+.team-card.accent-1 { --accent: #e8847c; }
+.team-card.accent-2 { --accent: #9fb87f; }
+.team-card.accent-3 { --accent: #7fb5ab; }
+.team-card.accent-4 { --accent: #7fa8cf; }
+.team-card.accent-5 { --accent: #c98fbd; }
+.team-card.accent-6 { --accent: #d99a5c; }
+.team-card.accent-7 { --accent: #c6a862; }
+.team-card.accent-8 { --accent: #e59aa7; }
+.team-card.accent-9 { --accent: #a7b87a; }
+.team-card:nth-child(even) { --tilt: 2deg; }
+.team-card:nth-child(odd) { --tilt: -2deg; }
+.team-photo { aspect-ratio: 4 / 5; overflow: hidden; border-radius: 18px; background: var(--paper); margin-bottom: 14px; transition: transform 0.4s cubic-bezier(.22, .8, .36, 1), box-shadow 0.4s ease; }
 .team-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.team-name { font-family: var(--display); font-size: 20px; font-weight: 500; line-height: 1.25; margin: 0 0 2px; }
+.team-card:hover .team-photo, .team-card:focus-within .team-photo { transform: scale(1.04) rotate(var(--tilt, -2deg)); box-shadow: 0 0 0 4px var(--accent); }
+.team-name { position: relative; display: inline-block; font-family: var(--display); font-size: 20px; font-weight: 500; line-height: 1.25; margin: 0 0 2px; }
+.team-name::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 0; height: 2px; background: var(--accent); transition: width 0.3s ease; }
+.team-card:hover .team-name::after, .team-card:focus-within .team-name::after { width: 100%; }
 .team-card .caps { margin: 0; }
 .team-bio { margin: 8px 0 0; }
 @media (max-width: 860px) { .team-grid, .team-grid.compact { grid-template-columns: repeat(2, 1fr); gap: 32px 18px; } }
@@ -588,8 +608,13 @@ textarea:focus-visible { border-color: var(--red); box-shadow: 0 0 0 3px rgb(212
 .post-card h3 { font-family: var(--display); font-size: 22px; font-weight: 500; line-height: 1.2; }
 .post-card:hover h3 { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; text-decoration-color: var(--mustard); }
 .post-card .caps, .post-card p { margin: 0; }
+.tag-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: var(--mustard); }
+.tag-dot.tag-planning { background: var(--red); }
+.tag-dot.tag-guides { background: var(--ink); }
+.story-mark { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--red-dark); margin: 4px 0 0 !important; }
 .post-photo { aspect-ratio: 3 / 2; overflow: hidden; border-radius: 18px; background: var(--paper); margin-bottom: 6px; }
-.post-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.post-photo img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.6s ease; }
+.post-card:hover .post-photo img, .post-card:focus-visible .post-photo img { transform: scale(1.06); }
 .post { max-width: 760px; margin: 0 auto clamp(48px, 8vw, 100px); }
 .post h1 { font-family: var(--display); font-size: clamp(32px, 4.6vw, 52px); font-weight: 700; line-height: 1.08; letter-spacing: -0.01em; margin: 12px 0 14px; }
 .post .lead { margin: 0 0 10px; }
