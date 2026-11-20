@@ -7,7 +7,7 @@ function defaultEvent() {
   // Four Saturdays from now is a sensible starting date.
   const date = new Date();
   date.setDate(date.getDate() + ((6 - date.getDay() + 7) % 7) + 21);
-  return { type: "Kwanjula", guests: 250, tents: 6, date: toISODate(date), district: "Mukono", setup: "vendor" };
+  return { type: "Introduction", guests: 250, tents: 6, date: toISODate(date), district: "Mukono", setup: "vendor" };
 }
 
 function load() {

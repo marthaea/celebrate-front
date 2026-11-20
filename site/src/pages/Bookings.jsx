@@ -5,10 +5,8 @@ import { ErrorNote, Loading, PageHead } from "../components.jsx";
 import { useState } from "react";
 import { daysUntil, localBookings, more, Offline } from "../extra.js";
 import { useAccount } from "../account.jsx";
-import { useT } from "../i18n.jsx";
 
 export default function Bookings() {
-  const t = useT();
   const { customer } = useAccount();
   // The account's bookings from the server; offline, the copies kept in this browser.
   const { data, error, loading } = useLoad(async () => {
@@ -31,34 +29,39 @@ export default function Bookings() {
   if (!customer) {
     return (
       <div className="page centre-page">
-        <PageHead eyebrow={t("Bookings")} title={t("Your events")}>
+        <PageHead eyebrow="Bookings" title="Your events">
           <p className="quiet">Sign in to see your bookings, receipts, messages with vendors and appointments.</p>
         </PageHead>
-        <Link to="/account?next=/bookings" className="button fit">{t("Log in")}</Link>
+        <Link to="/account?next=/bookings" className="button fit">Log in</Link>
       </div>
     );
   }
 
   return (
     <div className="page centre-page wide">
-      <PageHead eyebrow={t("Bookings")} title={t("Your events")} />
+      <PageHead eyebrow="Bookings" title="Your events" />
       <ErrorNote>{error}</ErrorNote>
       {loading && <Loading />}
       {data && data.length === 0 && (
         <>
           <p className="quiet">No bookings yet. Once you pay for a plan, its receipt and vendor updates appear here.</p>
-          <Link to="/services" className="button fit">{t("Browse services")}</Link>
+          <Link to="/services" className="button fit">Browse services</Link>
         </>
       )}
       {data && data.length > 0 && (
         <ul className="lines bookings">
           {[...data].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((booking) => {
-            const waiting = booking.vendors.filter((v) => v.status !== "Confirmed").length;
+            const waiting = booking.vendors.filter((v) => v.status === "Waiting").length;
+            const trouble = booking.vendors.filter((v) => ["Declined", "Cancelled"].includes(v.status) && v.cancelled?.by !== "customer").length;
+            const state = booking.status === "awaiting_payment" ? ["waiting", "Finish paying"]
+              : booking.status === "cancelled" ? ["off", "Cancelled"]
+              : trouble ? ["waiting", `${trouble} to replace`]
+              : waiting ? ["waiting", `${waiting} waiting`] : ["confirmed", "Confirmed"];
             return (
               <li key={booking.id}>
-                <Link to={`/receipt/${booking.id}`}>
-                  <span>{booking.event.type} · {formatDate(booking.event.date)}<small className="quiet">{booking.id} · {booking.event.district} · {money(booking.paid)}{daysUntil(booking.event.date) > 0 ? ` · ${daysUntil(booking.event.date)} ${t("days to go")}` : ""}</small></span>
-                  <span className={`state ${waiting ? "waiting" : "confirmed"}`}>{waiting ? `${waiting} waiting` : "Confirmed"}</span>
+                <Link to={booking.status === "awaiting_payment" ? `/pay/${booking.id}` : `/receipt/${booking.id}`}>
+                  <span>{booking.event.type} · {formatDate(booking.event.date)}<small className="quiet">{booking.id} · {booking.event.district} · {money(booking.paid)}{daysUntil(booking.event.date) > 0 ? ` · ${daysUntil(booking.event.date)} days to go` : ""}</small></span>
+                  <span className={`state ${state[0]}`}>{state[1]}</span>
                 </Link>
               </li>
             );

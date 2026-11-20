@@ -96,11 +96,10 @@ where. The fonts are Bricolage Grotesque and DM Sans, both under the SIL Open Fo
 | --- | --- | --- |
 | Budget planner | `/budget` | Builds a plan that fits a budget (`site/src/budget.js`); every part can be swapped. |
 | Shared plan and pledges | `/share/<code>` | The plan travels inside the link. Pledges are promises, not payments. |
-| English / Luganda | header switch | Main wording only (`site/src/i18n.jsx`); the Luganda needs checking by a fluent speaker. |
 | Countdown and checklist | receipt page | Ticks are kept on the device. |
 | Install and offline use | `site/public/sw.js`, `manifest.webmanifest` | Built site only. Pages already opened work offline; prices and booking need a connection. |
 | Compare | tick boxes on `/services`, then `/compare` | Up to three services, costed for the customer's event. |
-| Availability | calendar on each service; warning on the plan | Sample calendar (`server/availability.js`) plus dates booked through the site. |
+| Availability | calendar on each service; warning on the plan | Days booked through the site plus days vendors mark busy (`server/availability.js`); similar free vendors are suggested. |
 | PDF receipt with QR code | receipt page | The code opens `/verify/<receipt no.>`, where a vendor can check the booking. |
 | Confetti, drum beat, sample plan | receipt page; home page | Skipped for visitors who ask for reduced motion. |
 
@@ -112,7 +111,7 @@ Netlify (`netlify/functions/api.js`). Replace it with a database when the real b
 | Feature | Where | Notes |
 | --- | --- | --- |
 | Deposit now, balance on the day | pay page, receipt page | 30% deposit (`DEPOSIT_RATE` in `server/pricing.js`). The balance can be paid from the receipt on the day or before. The phone app still pays in full. |
-| Messages with vendors | receipt page, per vendor | Phone numbers and email addresses are removed from messages (`hideContacts` in `server/extras.js`). Vendors have no inbox yet, so only the customer's side is delivered. |
+| Messages with vendors | receipt page and vendor workspace | Phone numbers and email addresses are removed from messages (`hideContacts` in `server/core.js`). |
 | Appointments | "before you book" on each service; listed under Bookings | Tastings, fittings, viewings; the kind comes from the category (`visit` in `server/data.js`). |
 | Privacy page | `/privacy` | A draft: needs legal review and contact details before launch. |
 | Sign-in check | sign-in pages | Cloudflare Turnstile, on customer, vendor and admin sign-in and on vendor applications. |
@@ -133,8 +132,8 @@ Keep the secret key out of the repository.
 | Who | Where | What they do |
 | --- | --- | --- |
 | A business | `/vendors` | Applies to be listed. The application waits for the admin. |
-| Vendor | `/vendor` | Signs in with business name and password. Confirms or declines bookings, approves appointments, marks busy days on a calendar, answers customers' messages, and sees reviews and what they are owed. |
-| Admin | `/admin` | Signs in with a password. Approves, rejects, verifies, suspends and adds vendors, sets their passwords, sees every customer payment and balance, records payouts to vendors, sees appointments, and removes reviews. |
+| Vendor | `/vendor` | Signs in with business name and password. While applying: the five onboarding steps. Once approved: accepts or declines bookings within 24 hours, marks them delivered, cancels with a reason, answers complaints, approves appointments, keeps a calendar and its services, answers messages, and sees reviews and payouts. |
+| Admin | `/admin` | Signs in with a password. Reviews applications (approve, or reject with a reason), decides cases, verifies, suspends and adds vendors, sets vendor passwords, manages host accounts, and sees every payment, refund and payout. |
 | Customer | receipt page | Reviews each vendor (1 to 5 stars and a few words) once the event has happened or the balance is paid. Reviews update the vendor's rating. |
 
 Availability now comes from two real sources only: events booked through the site and the busy days
@@ -152,26 +151,78 @@ Set these on the host (Netlify: **Site configuration → Environment variables**
 - `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`: see above. Vendor and admin sign-in and vendor
   applications all go through the same Cloudflare check.
 
-Still to come with the real backend: vendors adding their own listings, password reset by SMS, and
-moving real money.
+Still to come with the real backend: sending SMS, moving real money, and a database (see
+[docs/API.md](docs/API.md#what-is-simulated)).
+
+## The agreed workflow (A to F)
+
+The website follows the workflow agreed for Celebrate: host registration by SMS code, vendor
+onboarding with documents and approval, browsing with filters and per-service settings, payment
+approved on the host's phone, vendor acceptance, delivery and payout, and cancellations, refunds
+and complaints.
+
+- **[docs/WORKFLOW.md](docs/WORKFLOW.md)**: every step, the screen that does it, the route behind
+  it and the test that checks it, plus the decisions made where the workflow left room.
+- **[docs/API.md](docs/API.md)**: the contract for the real backend: every route, the data
+  shapes, the rules, and what the stand-in server simulates.
+
+`npm test` runs `tests/workflow.js`, which walks steps A to F against the API.
 
 ## Customer accounts
 
-Customers sign up and sign in with their name, a Ugandan mobile number and a password, through the
-same Cloudflare check (`server/customers.js`, page `/account`). Sign-ins last 30 days on that browser.
+Hosts sign up with their name and a Ugandan mobile number, confirmed by a code sent by SMS (three
+tries), and tick the terms and privacy notice. They sign in later with a new code; there is no
+password. The code request goes through the Cloudflare check (`server/customers.js`, page
+`/account`). Until an SMS provider is connected the site shows the code on screen. Sign-ins last 30
+days on that browser.
 
 - Paying needs an account: the pay page sends signed-out visitors to sign in first and back again.
 - A booking made while signed in belongs to that account. Only its owner can open the receipt, message
   its vendors, pay the balance or leave reviews. A stranger with the receipt number is refused.
 - Requesting a tasting, fitting or viewing needs an account; the vendor sees the account's name.
-- `/bookings` lists the account's bookings and appointments; `/account` changes the name or password
-  and signs out (which also clears this browser's copy of the bookings).
+- `/bookings` lists the account's bookings and appointments; `/account` changes the name and signs
+  out (which also clears this browser's copy of the bookings).
 - Vendors never see a customer's phone number. A vendor scanning a receipt's QR code sees what was
   booked, whether it is paid and the customer's first name (`/api/bookings/:id/verify`).
 - The admin dashboard has a **Customers** section: search, see bookings and payments per account,
-  suspend or restore an account, and reset a forgotten password after checking it is really them.
+  suspend or restore an account.
 - Bookings made without an account (the earlier phone-app version still makes those) stay reachable
   by receipt number, as before.
 
 Sign-in code shared by customers, vendors and the admin (password hashing, signed tokens, the
 Cloudflare check) is in `server/auth.js`.
+
+## Search engines (SEO)
+
+- Every page gets its own title, description, keywords, canonical link, social preview
+  (`og:*`, `twitter:*`, image `site/public/og/celebrate.jpg`) and structured data (Organization,
+  WebSite, Service with price and rating, breadcrumbs). The text lives in `site/src/seoText.js`.
+- On Netlify an edge function (`netlify/edge-functions/seo.js`) writes these tags into the page
+  before it is sent, so search engines and link previews see them without running JavaScript.
+  `npm start` does the same in `server/index.js`. In the browser `site/src/seo.js` updates them as
+  you move between pages.
+- `/sitemap.xml` lists the public pages and every service; `/robots.txt` keeps private pages
+  (accounts, payments, receipts, admin, vendor workspace) out of search results.
+- Optional settings: `SITE_URL` (the address to use in links, such as `https://celebrate.ug`) and
+  `GOOGLE_SITE_VERIFICATION` (the code from Google Search Console's "HTML tag" method).
+- In Google Search Console: add the site, verify it, then submit `https://<your site>/sitemap.xml`
+  under Sitemaps.
+
+## Fairness across regions
+
+- Event types are neutral (Introduction, Wedding, Giveaway, Graduation, Cultural ceremony, Party), with
+  a short note explaining each; districts cover the Central, Eastern, Northern and Western regions,
+  and every area picker has "Other…" for places not on the list.
+- MCs list the languages they work in (English, Swahili and 18 Ugandan languages, plus "other").
+- The sample businesses are spread across the regions with budget, mid-range and premium prices.
+  Their names, prices and ratings are made up for the demonstration.
+
+## About, team and blog pages
+
+- `/about` tells Celebrate's story; edit the words in `site/src/pages/About.jsx`.
+- `/team` (and the "Meet the team" row on the home and about pages) reads `site/src/team.js`. Put
+  real portraits in `site/public/team/` (about 800 × 1000 pixels) and change each person's `photo`,
+  `name`, `role` and `bio`. The grey silhouettes are placeholders.
+- `/blog` and `/blog/<slug>` read `site/src/blog.js`. The four posts there are samples; edit them or
+  add your own (instructions at the top of the file). Each post gets its own search-engine title,
+  description, article data and a sitemap entry automatically.

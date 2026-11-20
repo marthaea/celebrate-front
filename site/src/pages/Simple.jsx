@@ -4,10 +4,9 @@ import { BadgeCheck, CalendarCheck, Wallet } from "lucide-react";
 import { usePlan } from "../../../src/plan.jsx";
 import { api, useLoad } from "../../../src/api.js";
 import { more } from "../extra.js";
-import { staff } from "../staff.js";
+import { session as vendorSession, staff } from "../staff.js";
 import { useAccount } from "../account.jsx";
-import { Art, ErrorNote, HumanCheck, Mark, PageHead } from "../components.jsx";
-import { useT } from "../i18n.jsx";
+import { AreaSelect, Art, ErrorNote, HumanCheck, Mark, PageHead } from "../components.jsx";
 
 /** Two halves: a photograph with a message on the left, the page's content on the right. */
 function Split({ photo, heading, line, children }) {
@@ -26,101 +25,152 @@ function Split({ photo, heading, line, children }) {
   );
 }
 
-/** Signing in, or opening an account. `next` is where to go afterwards (the pay page, say). */
+/**
+ * A: signing up or in with a code sent by SMS. Sign up: name and number, then the code (three tries),
+ * then tick the terms. Sign in: number, then the code. `next` is where to go afterwards.
+ */
 function SignInForm({ next }) {
   const plan = usePlan();
   const account = useAccount();
-  const t = useT();
   const navigate = useNavigate();
   const meta = useLoad(api.meta, []);
-  const [mode, setMode] = useState("in");
-  const [form, setForm] = useState({ name: plan.name, phone: "", password: "" });
+  const [mode, setMode] = useState("signup");
+  const [step, setStep] = useState("number");
+  const [form, setForm] = useState({ name: plan.name, phone: "", code: "" });
+  const [terms, setTerms] = useState(false);
+  const [sent, setSent] = useState(null);
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [tries, setTries] = useState(0);
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
-  const submit = async (event) => {
-    event.preventDefault();
+  const switchTo = (next) => {
+    setMode(next);
+    setStep("number");
+    setError("");
+    setSent(null);
+  };
+
+  const sendCode = async (event) => {
+    event?.preventDefault();
     setError("");
     setSending(true);
     try {
-      const result = mode === "in"
-        ? await more.signIn({ phone: form.phone, password: form.password, token })
-        : await more.register({ name: form.name, phone: form.phone, password: form.password, token });
+      setSent(await more.sendCode({ phone: form.phone, name: form.name, purpose: mode, token }));
+      setForm((f) => ({ ...f, code: "" }));
+      setStep("code");
+    } catch (err) {
+      setError(err.message);
+    }
+    setSending(false);
+    // A security check works once; a new code needs a fresh one.
+    setToken("");
+    setTries((n) => n + 1);
+  };
+
+  const verify = async (event) => {
+    event.preventDefault();
+    setError("");
+    if (step === "terms" && !terms) return setError("Tick the box to accept the terms and privacy notice.");
+    setSending(true);
+    try {
+      const result = await more.verifyCode({ phone: form.phone, code: form.code, acceptTerms: step === "terms" ? terms : undefined });
       account.signIn(result);
       plan.setName(result.customer.name);
       navigate(next || "/", { replace: true });
     } catch (err) {
-      setError(err.message);
       setSending(false);
-      // A check works once, so a failed try needs a fresh one.
-      setToken("");
-      setTries(tries + 1);
+      // A3 passed: the code is right, so A4 asks for the terms.
+      if (/accept the terms/i.test(err.message) && step === "code") {
+        setStep("terms");
+        return;
+      }
+      setError(err.message);
+      if (/new code|run out/i.test(err.message)) {
+        setStep("number");
+        setSent(null);
+      }
     }
   };
 
   return (
     <>
-      <PageHead eyebrow={t("Account")} title={mode === "in" ? t("Log in") : "Create your account"}>
-        <p className="quiet">{next === "/pay" ? "Sign in or create an account to pay. Your plan is kept." : "Your bookings, appointments and messages, on any phone or computer."}</p>
+      <PageHead eyebrow="Account" title={mode === "signup" ? "Sign up" : "Sign in"}>
+        <p className="quiet">{next === "/pay" ? "Sign in or sign up to pay. Your plan is kept." : "Your bookings, appointments and messages, on any phone. No password: we send you a code by SMS."}</p>
       </PageHead>
-      <div className="toolbar-row" role="group" aria-label="Sign in or create an account">
-        <button type="button" className={mode === "in" ? "active" : ""} aria-pressed={mode === "in"} onClick={() => { setMode("in"); setError(""); }}>I have an account</button>
-        <button type="button" className={mode === "new" ? "active" : ""} aria-pressed={mode === "new"} onClick={() => { setMode("new"); setError(""); }}>I am new here</button>
+      <div className="toolbar-row" role="group" aria-label="Sign up or sign in">
+        <button type="button" className={mode === "signup" ? "active" : ""} aria-pressed={mode === "signup"} onClick={() => switchTo("signup")}>I am new here</button>
+        <button type="button" className={mode === "signin" ? "active" : ""} aria-pressed={mode === "signin"} onClick={() => switchTo("signin")}>I have an account</button>
       </div>
-      <form className="form" onSubmit={submit}>
-        {mode === "new" && (
+
+      {step === "number" && (
+        <form className="form" onSubmit={sendCode}>
+          {mode === "signup" && (
+            <label className="field">
+              <span className="caps">Your name</span>
+              <input value={form.name} onChange={set("name")} placeholder="e.g. Nantongo Sarah" autoComplete="name" maxLength={40} required />
+            </label>
+          )}
           <label className="field">
-            <span className="caps">{t("Your name")}</span>
-            <input value={form.name} onChange={set("name")} placeholder="e.g. Nantongo" autoComplete="name" maxLength={40} required />
+            <span className="caps">Phone number</span>
+            <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="0770 123 456" autoComplete="tel" maxLength={16} required />
+            <small className="quiet">We send a 6-digit code to this number. Vendors never get it.</small>
           </label>
-        )}
-        <label className="field">
-          <span className="caps">Mobile number</span>
-          <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="0770 123 456" autoComplete="tel" maxLength={16} required />
-          {mode === "new" && <small className="quiet">Only Celebrate sees it. Vendors never get your number.</small>}
-        </label>
-        <label className="field">
-          <span className="caps">Password</span>
-          <input type="password" value={form.password} onChange={set("password")} autoComplete={mode === "in" ? "current-password" : "new-password"} minLength={mode === "new" ? 8 : undefined} required />
-          {mode === "new" && <small className="quiet">At least 8 characters.</small>}
-        </label>
-        <div className="field">
-          <span className="caps">Security check</span>
-          <HumanCheck siteKey={meta.data?.turnstile.siteKey} onToken={setToken} onProblem={setError} resetKey={tries} />
-          <small className="quiet">Cloudflare confirms you are a person.{meta.data?.turnstile.test ? " Running with Cloudflare's test keys, which always pass." : ""}</small>
-        </div>
-        <ErrorNote>{error || meta.error}</ErrorNote>
-        <button className="button" disabled={!token || sending}>{sending ? "Checking…" : mode === "in" ? t("Log in") : "Create account"}</button>
-        {mode === "in" && <p className="quiet">Forgotten your password? Contact Celebrate and we will reset it after checking it is you.</p>}
-        <p className="aside-note">See how we look after your details in our <Link to="/privacy" className="link-quiet">privacy policy</Link>.</p>
-      </form>
+          <div className="field">
+            <span className="caps">Security check</span>
+            <HumanCheck siteKey={meta.data?.turnstile.siteKey} onToken={setToken} onProblem={setError} resetKey={tries} />
+          </div>
+          <ErrorNote>{error || meta.error}</ErrorNote>
+          <button className="button" disabled={!token || sending}>{sending ? "Sending…" : "Send me a code"}</button>
+        </form>
+      )}
+
+      {(step === "code" || step === "terms") && sent && (
+        <form className="form" onSubmit={verify}>
+          <p className="aside-note" role="status" hidden={step === "terms"}>
+            We sent a code to <strong>{sent.phone}</strong>. It works for {sent.expiresInMinutes} minutes, and you have {sent.tries} tries.
+            {sent.demoCode && <><br /><strong>Demo:</strong> SMS is not connected yet, so here is your code: <strong className="demo-code">{sent.demoCode}</strong></>}
+          </p>
+          {step === "terms" && <p className="aside-note" role="status"><strong>Code accepted.</strong> One last step.</p>}
+          <label className="field" hidden={step === "terms"}>
+            <span className="caps">Code</span>
+            <input className="code-input" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, "").slice(0, 6) })} inputMode="numeric" autoComplete="one-time-code" placeholder="123456" required autoFocus />
+          </label>
+          {step === "terms" && (
+            <label className="tick">
+              <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} />
+              <span>I accept the <Link to="/terms" target="_blank" className="link-quiet">terms of use</Link> and the <Link to="/privacy" target="_blank" className="link-quiet">privacy notice</Link>.</span>
+            </label>
+          )}
+          <ErrorNote>{error}</ErrorNote>
+          <button className="button" disabled={form.code.length !== 6 || sending}>{sending ? "Checking…" : step === "terms" ? "Create my account" : mode === "signup" ? "Check the code" : "Sign in"}</button>
+          <p className="quiet">Wrong number, or no code? <button type="button" className="link-quiet" onClick={() => { setStep("number"); setError(""); }}>Start again</button></p>
+        </form>
+      )}
     </>
   );
 }
 
-/** The signed-in customer's details: change the name or password, or sign out. */
+/** The signed-in host's details: change the name, or sign out. */
 function Profile() {
   const account = useAccount();
   const plan = usePlan();
   const navigate = useNavigate();
   const { customer } = account;
   const [name, setName] = useState(customer.name);
-  const [passwords, setPasswords] = useState({ password: "", newPassword: "" });
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
 
-  const save = async (data, done) => {
+  const save = async (event) => {
+    event.preventDefault();
     setError("");
     setNote("");
     try {
-      const updated = await more.updateMe(data);
+      const updated = await more.updateMe({ name });
       account.update(updated);
       plan.setName(updated.name);
-      setNote(done);
-      setPasswords({ password: "", newPassword: "" });
+      setNote("Your name is saved.");
     } catch (err) {
       setError(err.message);
     }
@@ -143,24 +193,14 @@ function Profile() {
       </div>
       {note && <p className="aside-note" role="status">{note}</p>}
       <ErrorNote>{error}</ErrorNote>
-      <form className="form" onSubmit={(e) => { e.preventDefault(); save({ name }, "Your name is saved."); }}>
+      <form className="form" onSubmit={save}>
         <label className="field">
           <span className="caps">Your name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="name" required />
         </label>
         <button className="button outline" disabled={name.trim() === customer.name}>Save name</button>
       </form>
-      <form className="form" onSubmit={(e) => { e.preventDefault(); save(passwords, "Your password is changed."); }}>
-        <label className="field">
-          <span className="caps">Current password</span>
-          <input type="password" value={passwords.password} onChange={(e) => setPasswords({ ...passwords, password: e.target.value })} autoComplete="current-password" required />
-        </label>
-        <label className="field">
-          <span className="caps">New password</span>
-          <input type="password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} autoComplete="new-password" minLength={8} required />
-        </label>
-        <button className="button outline">Change password</button>
-      </form>
+      <p className="quiet">To change your phone number, contact Celebrate. You accepted the terms on {customer.termsAccepted ? new Date(customer.termsAccepted.at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "signing up"}.</p>
       <button className="button" onClick={signOut}>Sign out</button>
     </>
   );
@@ -179,20 +219,19 @@ export function Account() {
 }
 
 const REASONS = [
-  { icon: CalendarCheck, title: "Bookings come to you", text: "Families planning a kwanjula, wedding, graduation or party find you by district and date." },
+  { icon: CalendarCheck, title: "Bookings come to you", text: "Families planning an introduction, wedding, giveaway, graduation or party find you by district and date." },
   { icon: Wallet, title: "Clear prices, paid up front", text: "Customers see your price, labour and transport in one total, and pay before the day." },
   { icon: BadgeCheck, title: "A verified badge", text: "Verified vendors are shown first and marked on every listing." },
 ];
 
 export function Vendors() {
-  const t = useT();
   const meta = useLoad(api.meta, []);
-  const [form, setForm] = useState({ business: "", owner: "", category: "catering", district: "Kampala", about: "", password: "" });
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ business: "", owner: "", category: "catering", district: "Kampala", about: "", phone: "", email: "", password: "" });
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [tries, setTries] = useState(0);
-  const [done, setDone] = useState(null);
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
   const submit = async (e) => {
@@ -200,7 +239,9 @@ export function Vendors() {
     setError("");
     setSending(true);
     try {
-      setDone(await staff.apply({ ...form, token }));
+      // B1 creates the application and signs the vendor in, to carry on with steps 2 to 5.
+      vendorSession.set(await staff.apply({ ...form, token }));
+      navigate("/vendor");
     } catch (err) {
       setError(err.message);
       setToken("");
@@ -211,8 +252,8 @@ export function Vendors() {
 
   return (
     <Split photo="cat:catering" heading="Bring your business to the celebration." line="Tent hire, caterers, venues, cakes, drinks, attire, sound, photographers, MCs and games.">
-      <PageHead eyebrow={t("For vendors")} title={t("List my business")}>
-        <p className="quiet">Apply below. The Celebrate team checks every business before it goes live. Already approved? <Link to="/vendor" className="link-quiet">Vendor sign in</Link></p>
+      <PageHead eyebrow="For vendors" title="List my business">
+        <p className="quiet">Start here, then add proof, photos, your services and accept the agreement. The Celebrate team checks every business before it goes live. Already started? <Link to="/vendor" className="link-quiet">Vendor sign in</Link></p>
       </PageHead>
       <ul className="reasons">
         {REASONS.map(({ icon: Icon, title, text }) => (
@@ -223,11 +264,7 @@ export function Vendors() {
         ))}
       </ul>
 
-      {done ? (
-        <p className="aside-note" role="status">
-          <strong>Application received.</strong> {done.name} is now waiting to be checked. Once the Celebrate team approves it, sign in at <Link to="/vendor" className="link-quiet">Vendor sign in</Link> with your business name and the password you chose.
-        </p>
-      ) : (
+      {(
         <form className="form" onSubmit={submit}>
           <div className="fields">
             <label className="field"><span className="caps">Business name</span><input value={form.business} onChange={set("business")} maxLength={60} autoComplete="organization" required /></label>
@@ -235,18 +272,20 @@ export function Vendors() {
             <label className="field"><span className="caps">What you do</span>
               <select value={form.category} onChange={set("category")}>{(meta.data?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
             </label>
-            <label className="field"><span className="caps">District</span>
-              <select value={form.district} onChange={set("district")}>{(meta.data?.districts ?? []).map((d) => <option key={d}>{d}</option>)}</select>
-            </label>
+            <AreaSelect value={form.district} districts={meta.data?.districts ?? []} onChange={(district) => setForm((f) => ({ ...f, district }))} />
+          </div>
+          <div className="fields">
+            <label className="field"><span className="caps">Business phone</span><input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="0770 123 456" autoComplete="tel" required /></label>
+            <label className="field"><span className="caps">Email (optional)</span><input type="email" value={form.email} onChange={set("email")} autoComplete="email" /></label>
           </div>
           <label className="field"><span className="caps">About your business (optional)</span><input value={form.about} onChange={set("about")} maxLength={400} placeholder="How long you have traded, what you are known for" /></label>
-          <label className="field"><span className="caps">Choose a password</span><input type="password" value={form.password} onChange={set("password")} minLength={8} autoComplete="new-password" required /><small className="quiet">At least 8 characters. You will sign in with it once approved.</small></label>
+          <label className="field"><span className="caps">Choose a password</span><input type="password" value={form.password} onChange={set("password")} minLength={8} autoComplete="new-password" required /><small className="quiet">At least 8 characters. Use it to sign in and finish your application, and later to run your workspace.</small></label>
           <div className="field">
             <span className="caps">Security check</span>
             <HumanCheck siteKey={meta.data?.turnstile.siteKey} onToken={setToken} onProblem={setError} resetKey={tries} />
           </div>
           <ErrorNote>{error}</ErrorNote>
-          <button className="button" disabled={!token || sending}>{sending ? "Sending…" : "Apply to be listed"}</button>
+          <button className="button" disabled={!token || sending}>{sending ? "Starting…" : "Start my application"}</button>
           <p className="quiet">We keep what you enter to check and run your listing. See our <Link to="/privacy" className="link-quiet">privacy policy</Link>.</p>
         </form>
       )}
@@ -255,12 +294,11 @@ export function Vendors() {
 }
 
 export function NotFound() {
-  const t = useT();
   return (
     <div className="page centre-page">
       <Mark className="big" />
       <PageHead eyebrow="Not found" title="We could not find that page" />
-      <Link to="/" className="button fit">{t("Back to home")}</Link>
+      <Link to="/" className="button fit">Back to home</Link>
     </div>
   );
 }

@@ -31,8 +31,23 @@ export const more = {
   month: (id, month) => request(`/services/${encodeURIComponent(id)}/availability?month=${month}`),
   pledges: (key) => request(`/pledges/${key}`),
   pledge: (key, data) => request(`/pledges/${key}`, data),
-  register: (data) => request("/customers/register", data),
-  signIn: (data) => request("/customers/login", data),
+  // A: sign up and sign in with a code sent by SMS.
+  sendCode: (data) => request("/customers/code", data),
+  verifyCode: (data) => request("/customers/verify", data),
+  notifications: () => request("/me/notifications"),
+  quote: (event, items, choices) => request("/quote", { event, items, choices }),
+  service: (id) => request(`/services/${encodeURIComponent(id)}`),
+  services: (params = {}) => request(`/services?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
+  // D: payments wait for the host to approve on their phone.
+  payment: (id) => request(`/payments/${id}`),
+  pay: (bookingId, kind, payment) => request(`/bookings/${bookingId}/payments`, { kind, payment }),
+  simulate: (id, outcome) => request(`/payments/${id}/simulate`, { outcome }),
+  // E and F
+  confirmDelivery: (bookingId, serviceId) => request(`/bookings/${bookingId}/lines/${encodeURIComponent(serviceId)}/confirm`, {}),
+  complain: (bookingId, serviceId, data) => request(`/bookings/${bookingId}/lines/${encodeURIComponent(serviceId)}/complaint`, data),
+  cancellation: (bookingId) => request(`/bookings/${bookingId}/cancellation`),
+  cancel: (bookingId, reason) => request(`/bookings/${bookingId}/cancel`, { reason }),
+  upload: (data) => request("/uploads", data),
   me: () => request("/me"),
   updateMe: (data) => request("/me", data),
   myBookings: () => request("/me/bookings"),
@@ -40,7 +55,6 @@ export const more = {
   book: (data) => request("/bookings", data),
   booking: (id) => request(`/bookings/${encodeURIComponent(id)}`),
   verify: (id) => request(`/bookings/${encodeURIComponent(id)}/verify`),
-  payBalance: (id, payment) => request(`/bookings/${id}/balance`, { payment }),
   messages: (id) => request(`/bookings/${id}/messages`),
   sendMessage: (id, serviceId, text) => request(`/bookings/${id}/messages`, { serviceId, text }),
   slots: (id, date) => request(`/services/${encodeURIComponent(id)}/slots?date=${date}`),
@@ -88,8 +102,8 @@ export function daysUntil(iso) {
 }
 
 /** A shared plan travels inside its own link, so the link works without anything being stored. */
-export function encodePlan({ event, items, host }) {
-  const bytes = new TextEncoder().encode(JSON.stringify({ e: event, i: items, h: host }));
+export function encodePlan({ event, items, host, choices }) {
+  const bytes = new TextEncoder().encode(JSON.stringify({ e: event, i: items, h: host, c: choices }));
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
@@ -98,7 +112,7 @@ export function decodePlan(code) {
     const binary = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
     const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (ch) => ch.charCodeAt(0))));
     if (!data?.e || !Array.isArray(data.i) || !data.i.length) return null;
-    return { event: data.e, items: data.i.map(String), host: String(data.h ?? "").slice(0, 40) };
+    return { event: data.e, items: data.i.map(String), host: String(data.h ?? "").slice(0, 40), choices: data.c && typeof data.c === "object" ? data.c : {} };
   } catch {
     return null;
   }

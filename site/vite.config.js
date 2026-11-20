@@ -12,7 +12,7 @@ export default defineConfig({
   css: { postcss: { plugins: [] } },
   server: {
     port: 5175,
-    proxy: { "/api": "http://localhost:3001" },
+    proxy: { "/api": "http://localhost:3001", "/sitemap.xml": "http://localhost:3001", "/robots.txt": "http://localhost:3001" },
     fs: { allow: [path.join(here, "..")] },
   },
   build: { outDir: path.join(here, "dist"), emptyOutDir: true },

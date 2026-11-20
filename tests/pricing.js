@@ -27,5 +27,6 @@ test("event details are checked", () => {
   assert.deepEqual(validateEvent(event, today), []);
   assert.equal(validateEvent({ ...event, guests: 0 }, today).length, 1);
   assert.equal(validateEvent({ ...event, date: "2026-01-01" }, today).length, 1);
-  assert.equal(validateEvent({ ...event, district: "Nowhere" }, today).length, 1);
+  assert.equal(validateEvent({ ...event, district: "12 && <b>" }, today).length, 1);
+  assert.deepEqual(validateEvent({ ...event, district: "Kalangala" }, today), [], "a place typed under Other");
 });

@@ -1,4 +1,5 @@
-import { DISTRICTS, EVENT_TYPES } from "./data.js";
+import { EVENT_ALIASES, EVENT_TYPES, isPlace } from "./data.js";
+import { describeChoices, normaliseChoices, pricedWith } from "./options.js";
 
 export const PLATFORM_FEE_RATE = 0.03;
 
@@ -25,11 +26,12 @@ const plural = (n, unit) => `${n.toLocaleString("en-US")} ${unit}${n === 1 ? "" 
 export function validateEvent(event, today = new Date()) {
   const errors = [];
   if (!event || typeof event !== "object") return ["Event details are missing."];
-  if (!EVENT_TYPES.includes(event.type)) errors.push("Choose an event type.");
+  if (!EVENT_TYPES.includes(event.type) && !EVENT_ALIASES[event.type]) errors.push("Choose an event type.");
   if (!Number.isInteger(event.guests) || event.guests < 1 || event.guests > 5000) errors.push("Guests must be between 1 and 5,000.");
   if (!Number.isInteger(event.tents) || event.tents < 0 || event.tents > 100) errors.push("Tents must be between 0 and 100.");
-  if (!DISTRICTS.includes(event.district)) errors.push("Choose a district.");
+  if (!isPlace(event.district)) errors.push("Choose a district, or type your area.");
   if (!["vendor", "self"].includes(event.setup)) errors.push("Choose who handles setup.");
+  if (event.location !== undefined && (typeof event.location !== "string" || event.location.length > 120)) errors.push("Keep the location under 120 characters.");
   if (typeof event.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(event.date) || Number.isNaN(Date.parse(event.date))) {
     errors.push("Choose an event date.");
   } else if (event.date < today.toISOString().slice(0, 10)) {
@@ -38,8 +40,12 @@ export function validateEvent(event, today = new Date()) {
   return errors;
 }
 
-/** One number, every detail: line items, labour, transport, platform fee and the grand total. */
-export function buildQuote(services, event) {
+/**
+ * One number, every detail: line items, labour, transport, platform fee and the grand total.
+ * `choices` holds each service's settings by service id ({ buffet: { menu: "local", ... } });
+ * a service without settings is priced as listed.
+ */
+export function buildQuote(services, event, choices = {}) {
   const vendorSetup = event.setup === "vendor";
   let itemCost = 0;
   let labour = 0;
@@ -47,12 +53,21 @@ export function buildQuote(services, event) {
 
   const lines = services.map((service) => {
     const qty = quantityFor(service, event);
-    const amount = service.price * qty;
+    const settings = normaliseChoices(service.category, choices?.[service.id]);
+    const { unit, flat } = pricedWith(service, settings);
+    const amount = unit * qty + flat;
     itemCost += amount;
-    if (vendorSetup) labour += service.labour + service.labourPerQty * qty;
+    const lineLabour = vendorSetup ? service.labour + service.labourPerQty * qty : 0;
+    labour += lineLabour;
     transport += service.transport;
     const detail = service.qtyRule === "flat" ? service.summary : `${service.summary} × ${plural(qty, service.unit)}`;
-    return { id: service.id, category: service.category, name: service.name, vendor: service.vendor, qty, unit: service.unit, detail, amount };
+    const settingsText = describeChoices(service.category, settings);
+    return {
+      id: service.id, category: service.category, name: service.name, vendor: service.vendor,
+      qty, unit: service.unit, unitPrice: unit, detail, amount, choices: settings, settings: settingsText,
+      // What the vendor is paid for this line: their price, labour and transport. Our fee is on top.
+      labour: lineLabour, transport: service.transport, due: amount + lineLabour + service.transport,
+    };
   });
 
   const platformFee = Math.round((itemCost + labour + transport) * PLATFORM_FEE_RATE);

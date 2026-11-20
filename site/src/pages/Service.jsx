@@ -4,10 +4,13 @@ import { discountPercent, formatDate, money } from "../../../src/format.js";
 import { usePlan } from "../../../src/plan.jsx";
 import { Art, Calendar, ErrorNote, Loading } from "../components.jsx";
 import { more } from "../extra.js";
+import { useChoices } from "../choices.js";
+import { useSeo } from "../seo.js";
+import { normaliseChoices, pricedWith } from "../../../server/options.js";
+import { quantityFor } from "../../../server/pricing.js";
 import { useAccount } from "../account.jsx";
 import { useState } from "react";
 import { toISODate } from "../../../src/format.js";
-import { useT } from "../i18n.jsx";
 
 /** Books a tasting, fitting or viewing with the vendor. Contact stays on the site: no phone numbers are swapped. */
 function Visit({ service, kind }) {
@@ -73,13 +76,67 @@ function Visit({ service, kind }) {
   );
 }
 
+/** The settings for this kind of service, with what they do to the price for the host's event. */
+function Settings({ service, options, choices, onChange, event }) {
+  const settings = normaliseChoices(service.category, choices);
+  const qty = quantityFor(service, event);
+  const { unit, flat } = pricedWith(service, settings);
+  const amount = unit * qty + flat;
+  const set = (key, value) => onChange({ ...settings, [key]: value });
+  const effect = (choice) => {
+    const bits = [];
+    if (choice.mult) bits.push(`${choice.mult > 1 ? "+" : "−"}${Math.round(Math.abs(choice.mult - 1) * 100)}%`);
+    if (choice.perUnit) bits.push(`+${money(choice.perUnit)} per ${service.unit}`);
+    if (choice.flat) bits.push(`+${money(choice.flat)}`);
+    return bits.join(", ");
+  };
+  if (!options.length) return null;
+
+  return (
+    <section className="detail settings" aria-label="Your settings">
+      <h2 className="caps">Make it yours</h2>
+      {options.map((option) => (
+        <fieldset key={option.id} className="setting">
+          <legend>{option.label}</legend>
+          {option.type === "one" && option.choices.map((choice) => (
+            <label key={choice.id} className={`pick ${settings[option.id] === choice.id ? "on" : ""}`}>
+              <input type="radio" name={option.id} checked={settings[option.id] === choice.id} onChange={() => set(option.id, choice.id)} />
+              <span>{choice.label}</span>
+              {effect(choice) && <small>{effect(choice)}</small>}
+            </label>
+          ))}
+          {option.type === "many" && option.choices.map((choice) => {
+            const on = settings[option.id].includes(choice.id);
+            return (
+              <label key={choice.id} className={`pick ${on ? "on" : ""}`}>
+                <input type="checkbox" checked={on} onChange={() => set(option.id, on ? settings[option.id].filter((x) => x !== choice.id) : [...settings[option.id], choice.id])} />
+                <span>{choice.label}</span>
+                {effect(choice) && <small>{effect(choice)}</small>}
+              </label>
+            );
+          })}
+          {option.type === "text" && (
+            <input className="setting-text" value={settings[option.id]} maxLength={160} placeholder={option.placeholder} onChange={(e) => set(option.id, e.target.value)} aria-label={option.label} />
+          )}
+        </fieldset>
+      ))}
+      <p className="setting-total">
+        <span>For your {event.guests.toLocaleString("en-US")}-guest {event.type.toLowerCase()}</span>
+        <strong>{money(amount)}</strong>
+        <small className="quiet">{qty > 1 ? `${money(unit)} × ${qty.toLocaleString("en-US")} ${service.unit}s${flat ? ` + ${money(flat)}` : ""}` : "Before labour, transport and our 3% fee"}</small>
+      </p>
+    </section>
+  );
+}
+
 export default function Service() {
   const { id } = useParams();
   const navigate = useNavigate();
   const plan = usePlan();
-  const t = useT();
   const meta = useLoad(api.meta, []);
-  const { data: service, error, loading } = useLoad(() => api.service(id), [id]);
+  const { data: service, error, loading } = useLoad(() => more.service(id), [id]);
+  const [choices, setChoice] = useChoices();
+  useSeo(`/service/${id}`, { service }, Boolean(service) || Boolean(error));
   const added = plan.items.includes(id);
   const clash = useLoad(() => more.availability(plan.event.date, [id]), [id, plan.event.date]);
   const free = clash.data ? clash.data.unavailable.length === 0 : null;
@@ -93,14 +150,16 @@ export default function Service() {
   return (
     <article className="product">
       <div className="product-art">
-        <Art category={service.category} photo={service.id} seed={service.name.length} label={service.photoCaption} eager />
-        <p className="product-caption">Illustrative photograph · Pexels</p>
+        {service.photoUrls?.length
+          ? <div className="art art-photo"><img className="in" src={service.photoUrls[0]} alt={service.name} /></div>
+          : <Art category={service.category} photo={service.id} seed={service.name.length} label={service.photoCaption} eager />}
+        <p className="product-caption">{service.photoUrls?.length ? `Photo from ${service.vendor}` : "Illustrative photograph · Pexels"}</p>
       </div>
       <div className="product-info">
         <Link to={`/services/${service.category}`} className="link-quiet">← {category?.title ?? "Services"}</Link>
-        <p className="caps">{t(category?.title ?? "")}</p>
+        <p className="caps">{(category?.title ?? "")}</p>
         <h1>{service.name}</h1>
-        <p className="quiet">by {service.vendor}{service.verified ? " · Verified vendor" : ""} · Rated {service.rating} of 5 · {service.reviews} reviews</p>
+        <p className="quiet">by {service.vendor}{service.verified ? " · Verified vendor" : ""} · {service.reviews ? `Rated ${service.rating} of 5 · ${service.reviews} reviews` : "New on Celebrate"} · {service.district}</p>
 
         <p className="product-price">
           {money(service.price)} <span className="quiet">per {service.unit}</span>
@@ -108,23 +167,48 @@ export default function Service() {
           {off > 0 && <span className="tag inline">{off}% off</span>}
         </p>
 
+        <Settings service={service} options={service.options ?? []} choices={choices[id]} event={plan.event} onChange={(next) => setChoice(id, next)} />
+
         <button className={`button ${added ? "outline" : ""}`} onClick={() => (added ? plan.removeItem(id) : plan.addItem(id))}>
-          {t(added ? "Remove from my plan" : "Add to my plan")}
+          {(added ? "Remove from my plan" : "Add to my plan")}
         </button>
-        {added && <button className="button" onClick={() => navigate("/plan")}>{t("View my plan")}</button>}
+        {added && <button className="button" onClick={() => navigate("/plan")}>View my plan</button>}
+        {added && service.options?.length > 0 && <p className="quiet centre">Changes to your settings are saved in your plan as you make them.</p>}
         <p className={`centre availability ${free === false ? "no" : ""}`} role="status">
           {free === null ? "Checking the date…" : free ? `Free on ${formatDate(plan.event.date)} · ${service.district}` : `Booked on ${formatDate(plan.event.date)}. Pick another date below.`}
         </p>
+
+        {free === false && clash.data?.similar?.[id]?.length > 0 && (
+          <section className="detail">
+            <h2 className="caps">Free on {formatDate(plan.event.date)} instead</h2>
+            <ul className="similar">
+              {clash.data.similar[id].map((other) => (
+                <li key={other.id}>
+                  <Link to={`/service/${other.id}`}><strong>{other.name}</strong><span className="quiet">{other.vendor} · {other.district} · {money(other.price)} / {other.unit}{other.reviews ? ` · ★ ${other.rating}` : ""}</span></Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {service.photoUrls?.length > 1 && (
+          <section className="detail">
+            <h2 className="caps">More photos from {service.vendor}</h2>
+            <div className="gallery">{service.photoUrls.slice(1).map((url) => <img key={url} src={url} alt={`${service.name}, by ${service.vendor}`} loading="lazy" />)}</div>
+          </section>
+        )}
 
         <section className="detail">
           <h2 className="caps">Availability</h2>
           <Calendar serviceId={id} value={plan.event.date} onPick={(date) => plan.setEvent({ date })} />
         </section>
 
-        <section className="detail">
-          <h2 className="caps">{t("What is included")}</h2>
-          <ul>{service.included.map((line) => <li key={line}>{line}</li>)}</ul>
-        </section>
+        {service.included.length > 0 && (
+          <section className="detail">
+            <h2 className="caps">What is included</h2>
+            <ul>{service.included.map((line) => <li key={line}>{line}</li>)}</ul>
+          </section>
+        )}
 
         {category?.visit && <Visit service={service} kind={category.visit} />}
 

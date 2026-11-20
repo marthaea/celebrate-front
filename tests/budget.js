@@ -5,7 +5,7 @@ import { buildQuote, PLATFORM_FEE_RATE } from "../server/pricing.js";
 import { nextFreeDate, unavailable } from "../server/availability.js";
 import { suggest, totalOf } from "../site/src/budget.js";
 
-const event = { type: "Kwanjula", guests: 250, tents: 6, date: "2026-12-12", district: "Mukono", setup: "vendor" };
+const event = { type: "Introduction", guests: 250, tents: 6, date: "2026-12-12", district: "Mukono", setup: "vendor" };
 const categories = CATEGORIES.map((category) => ({
   ...category,
   options: SERVICES.filter((s) => s.category === category.id)
@@ -18,20 +18,20 @@ const categories = CATEGORIES.map((category) => ({
 
 test("a suggested plan never costs more than the budget", () => {
   for (const budget of [3000000, 8000000, 12000000, 20000000, 60000000]) {
-    const picks = suggest(categories, budget, "Kwanjula", PLATFORM_FEE_RATE);
+    const picks = suggest(categories, budget, "Introduction", PLATFORM_FEE_RATE);
     assert.ok(totalOf(picks, PLATFORM_FEE_RATE) <= budget, `over budget at ${budget}`);
   }
 });
 
 test("the planner's total matches the real quote for the same services", () => {
-  const picks = suggest(categories, 15000000, "Kwanjula", PLATFORM_FEE_RATE);
+  const picks = suggest(categories, 15000000, "Introduction", PLATFORM_FEE_RATE);
   const services = Object.values(picks).map((option) => SERVICES.find((s) => s.id === option.id));
   assert.equal(totalOf(picks, PLATFORM_FEE_RATE), buildQuote(services, event).total);
 });
 
 test("a bigger budget fills more and better, and the most important categories come first", () => {
-  const small = suggest(categories, 3000000, "Kwanjula", PLATFORM_FEE_RATE);
-  const large = suggest(categories, 60000000, "Kwanjula", PLATFORM_FEE_RATE);
+  const small = suggest(categories, 3000000, "Introduction", PLATFORM_FEE_RATE);
+  const large = suggest(categories, 60000000, "Introduction", PLATFORM_FEE_RATE);
   assert.ok(small.tents, "tents come first for a kwanjula");
   assert.ok(Object.keys(large).length > Object.keys(small).length);
   assert.equal(Object.keys(large).length, categories.length);
@@ -39,7 +39,7 @@ test("a bigger budget fills more and better, and the most important categories c
 });
 
 test("a budget too small for anything gives an empty plan", () => {
-  assert.deepEqual(suggest(categories, 100000, "Kwanjula", PLATFORM_FEE_RATE), {});
+  assert.deepEqual(suggest(categories, 50000, "Introduction", PLATFORM_FEE_RATE), {});
 });
 
 test("a service already booked through the site is not free that day, and a free date is found", () => {

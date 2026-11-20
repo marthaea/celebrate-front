@@ -3,7 +3,9 @@
 
 // Which categories matter most for each kind of event; earlier ones are filled and upgraded first.
 export const PRIORITY = {
-  Kwanjula: ["tents", "catering", "sound", "mcs", "attire", "photos", "cakes", "drinks", "venues", "games"],
+  Introduction: ["tents", "catering", "sound", "mcs", "attire", "photos", "cakes", "drinks", "venues", "games"],
+  Giveaway: ["tents", "catering", "sound", "mcs", "attire", "photos", "cakes", "drinks", "venues", "games"],
+  "Cultural ceremony": ["tents", "catering", "sound", "mcs", "attire", "drinks", "photos", "venues", "cakes", "games"],
   Wedding: ["venues", "catering", "attire", "tents", "sound", "photos", "cakes", "drinks", "mcs", "games"],
   Graduation: ["catering", "tents", "sound", "photos", "cakes", "drinks", "mcs", "venues", "attire", "games"],
   Party: ["catering", "drinks", "sound", "cakes", "games", "tents", "photos", "mcs", "venues", "attire"],
@@ -22,7 +24,7 @@ export function totalOf(picks, feeRate) {
  * `categories` is [{ id, options: [{ id, cost, ... }] sorted by cost }]. Returns { categoryId: option }.
  */
 export function suggest(categories, budget, type, feeRate) {
-  const order = (PRIORITY[type] ?? PRIORITY.Kwanjula)
+  const order = (PRIORITY[type] ?? PRIORITY.Introduction)
     .map((id) => categories.find((category) => category.id === id))
     .filter((category) => category?.options.length);
   const picks = {};
@@ -49,6 +51,6 @@ export function suggest(categories, budget, type, feeRate) {
 
 /** The least this event can cost with the single most important category filled. */
 export function smallestBudget(categories, type, feeRate) {
-  const first = (PRIORITY[type] ?? PRIORITY.Kwanjula).map((id) => categories.find((c) => c.id === id)).find((c) => c?.options.length);
+  const first = (PRIORITY[type] ?? PRIORITY.Introduction).map((id) => categories.find((c) => c.id === id)).find((c) => c?.options.length);
   return first ? totalOf({ [first.id]: first.options[0] }, feeRate) : 0;
 }

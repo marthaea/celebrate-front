@@ -9,7 +9,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "NODE_ENV=production node server/index.js",
-    "test": "node --test tests/pricing.js tests/budget.js tests/api.js",
+    "test": "node --test tests/pricing.js tests/budget.js tests/api.js tests/workflow.js",
     "dev:site": "concurrently -k -n api,site -c magenta,cyan \"npm run dev:api\" \"vite --config site/vite.config.js\"",
     "build:site": "vite build --config site/vite.config.js",
     "start:site": "STATIC_DIR=site/dist NODE_ENV=production node server/index.js"

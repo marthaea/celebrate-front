@@ -4,17 +4,15 @@ import { Copy, MessageCircle } from "lucide-react";
 import { api, useLoad } from "../../../src/api.js";
 import { formatDate, money } from "../../../src/format.js";
 import { daysUntil, decodePlan, more, planKey } from "../extra.js";
-import { useT } from "../i18n.jsx";
 import { ErrorNote, Loading, PageHead } from "../components.jsx";
 
 /** A plan shared with family and friends, who can pledge towards it. */
 export default function Share() {
   const { code } = useParams();
-  const t = useT();
   const shared = useMemo(() => decodePlan(code), [code]);
   const key = useMemo(() => planKey(code), [code]);
   const meta = useLoad(api.meta, []);
-  const quote = useLoad(() => (shared ? api.quote(shared.event, shared.items) : Promise.resolve(null)), [code]);
+  const quote = useLoad(() => (shared ? more.quote(shared.event, shared.items, shared.choices) : Promise.resolve(null)), [code]);
   const loaded = useLoad(() => (shared ? more.pledges(key) : Promise.resolve([])), [key]);
   const [posted, setPosted] = useState(null);
   const [form, setForm] = useState({ name: "", amount: "", towards: "" });
@@ -28,7 +26,7 @@ export default function Share() {
         <PageHead eyebrow="Shared plan" title="This link is not complete">
           <p className="quiet">Ask the person who sent it to share the plan again.</p>
         </PageHead>
-        <Link to="/" className="button fit">{t("Back to home")}</Link>
+        <Link to="/" className="button fit">Back to home</Link>
       </div>
     );
   }
@@ -74,10 +72,10 @@ export default function Share() {
     <div className="page">
       <div className="band">
         <PageHead eyebrow="You are invited to chip in" title={name}>
-          <p>{formatDate(event.date)} · {event.district} · {event.guests.toLocaleString("en-US")} guests{days >= 0 ? ` · ${days} ${t("days to go")}` : ""}</p>
+          <p>{formatDate(event.date)} · {event.district} · {event.guests.toLocaleString("en-US")} guests{days >= 0 ? ` · ${days} days to go` : ""}</p>
         </PageHead>
         <div className="band-actions">
-          <a className="button fit dark" href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer"><MessageCircle size={18} aria-hidden="true" /> {t("Share on WhatsApp")}</a>
+          <a className="button fit dark" href={`https://wa.me/?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer"><MessageCircle size={18} aria-hidden="true" /> Share on WhatsApp</a>
           <button className="button fit outline" onClick={copy}><Copy size={18} aria-hidden="true" /> {copied ? "Link copied" : "Copy link"}</button>
         </div>
       </div>
@@ -103,7 +101,7 @@ export default function Share() {
                   return (
                     <li key={line.id}>
                       <div>
-                        <p><strong>{t(title)}</strong> · {money(line.amount)}</p>
+                        <p><strong>{title}</strong> · {money(line.amount)}</p>
                         <p className="quiet">{line.detail} · {line.vendor}</p>
                         {got > 0 && <p className="covered">{got >= line.amount ? "Covered" : `${money(got)} pledged`}</p>}
                       </div>
@@ -120,7 +118,7 @@ export default function Share() {
             <h2 className="caps">Make a pledge</h2>
             <form className="form" onSubmit={submit} noValidate>
               <label className="field">
-                <span className="caps">{t("Your name")}</span>
+                <span className="caps">Your name</span>
                 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Uncle Kato" maxLength={40} autoComplete="name" />
               </label>
               <label className="field">

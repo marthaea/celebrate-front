@@ -1,57 +1,71 @@
+// The Celebrate API: a working stand-in for the real backend, built to the contract in docs/API.md.
+// Every route here is one the website calls; a real backend that answers the same routes with the
+// same shapes can replace this file by file.
 import express from "express";
-import { CATEGORIES, DISTRICTS, EVENT_TYPES, OFFER_IDS, PAYMENT_METHODS, SERVICES, VISIT_TIMES } from "./data.js";
-import { addExtras, readPayment } from "./extras.js";
+import { CATEGORIES, DISTRICTS, EVENT_NOTES, EVENT_TYPES, OFFER_IDS, PAYMENT_METHODS, VISIT_TIMES } from "./data.js";
+import { OPTIONS } from "./options.js";
+import { addExtras } from "./extras.js";
 import { TURNSTILE } from "./auth.js";
-import { currentCustomer, mayUse } from "./customers.js";
-import { buildQuote, DEPOSIT_RATE, depositFor, PLATFORM_FEE_RATE, validateEvent } from "./pricing.js";
+import { mayUse, SIMULATED_SMS, TERMS_VERSION } from "./customers.js";
+import { buildQuote, DEPOSIT_RATE, PLATFORM_FEE_RATE, validateEvent } from "./pricing.js";
 import { bookedDays, nextFreeDate, unavailable } from "./availability.js";
 import { read, write } from "./store.js";
-import { addStaff, DEMO, DEMO_ADMIN_PASSWORD, DEMO_VENDOR_PASSWORD } from "./staff.js";
-import { hiddenServiceIds, loadBusy, loadReviews, withReviews } from "./vendors.js";
+import { addStaff, AGREEMENT_VERSION, DEMO, DEMO_ADMIN_PASSWORD, DEMO_VENDOR_PASSWORD } from "./staff.js";
+import { loadBusy, loadCatalogue } from "./vendors.js";
+import { addOrders, CASE_WORKING_DAYS, CONFIRM_HOURS, loadBookings, REFUND_RULES, RESPOND_HOURS, SIMULATED_PAYMENTS } from "./orders.js";
+import { addUploads } from "./uploads.js";
+import { money, safe } from "./core.js";
+import { renderRobots, renderSitemap } from "../site/src/seoText.js";
 
 const app = express();
+// Uploads take larger bodies on their own route; everything else stays small.
+addUploads(app, express);
 app.use(express.json({ limit: "50kb" }));
+// Behind Netlify or another proxy, so the site's own address (for the sitemap) is read correctly.
+app.set("trust proxy", true);
 
-const byId = new Map(SERVICES.map((service) => [service.id, service]));
+/** The site's public address: SITE_URL if set, otherwise the address the request came in on. */
+export const siteOrigin = (req) => (process.env.SITE_URL || `${req.protocol}://${req.get("x-forwarded-host") || req.get("host")}`).replace(/\/$/, "");
+
+app.get(["/sitemap.xml", "/api/sitemap.xml"], safe(async (req, res) => {
+  res.type("application/xml").send(renderSitemap(siteOrigin(req), (await loadCatalogue()).visible));
+}));
+
+app.get(["/robots.txt", "/api/robots.txt"], (req, res) => res.type("text/plain").send(renderRobots(siteOrigin(req))));
+
 const categoryById = new Map(CATEGORIES.map((category) => [category.id, category]));
-
-// Bookings and pledges are kept through store.js: in memory unless the host plugs in something lasting.
-const loadBookings = () => read("bookings", []);
-const FIRST_RECEIPT = 123;
-
-// Express 4 does not catch errors from async handlers by itself.
-const safe = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
-
-const money = (n) => `UGX ${n.toLocaleString("en-US")}`;
-
-function resolveItems(ids) {
-  if (!Array.isArray(ids) || ids.length === 0) return { error: "Your plan is empty." };
-  const unique = [...new Set(ids)];
-  const services = unique.map((id) => byId.get(id));
-  if (services.some((service) => !service)) return { error: "A service in your plan is no longer available." };
-  return { services };
-}
 
 app.get("/api/meta", (_req, res) => {
   res.json({
-    eventTypes: EVENT_TYPES, districts: DISTRICTS, categories: CATEGORIES, paymentMethods: PAYMENT_METHODS,
-    depositRate: DEPOSIT_RATE, visitTimes: VISIT_TIMES,
+    eventTypes: EVENT_TYPES, eventNotes: EVENT_NOTES, districts: DISTRICTS, categories: CATEGORIES, paymentMethods: PAYMENT_METHODS,
+    depositRate: DEPOSIT_RATE, feeRate: PLATFORM_FEE_RATE, visitTimes: VISIT_TIMES, options: OPTIONS,
+    rules: {
+      respondHours: RESPOND_HOURS, confirmHours: CONFIRM_HOURS, caseWorkingDays: CASE_WORKING_DAYS,
+      refunds: REFUND_RULES.map(({ rate, text }) => ({ rate, text })),
+    },
+    versions: { terms: TERMS_VERSION, vendorAgreement: AGREEMENT_VERSION },
     turnstile: { siteKey: TURNSTILE.siteKey, test: TURNSTILE.test },
+    // What is simulated until the real services are connected. The site says so where it matters.
+    simulated: { payments: SIMULATED_PAYMENTS, sms: SIMULATED_SMS },
     // In demo mode (no ADMIN_PASSWORD set) the sign-in pages show these so the interfaces can be tried.
     demo: DEMO ? { admin: DEMO_ADMIN_PASSWORD, vendor: DEMO_VENDOR_PASSWORD } : null,
   });
 });
 
-/** The catalogue customers can see: vendors in good standing, with ratings brought up to date. */
-async function catalogue() {
-  const [hidden, reviews] = await Promise.all([hiddenServiceIds(), loadReviews()]);
-  return SERVICES.filter((service) => !hidden.has(service.id)).map((service) => withReviews(service, reviews));
-}
+const photoUrls = (service) => (service.photoIds ?? []).map((id) => `/api/uploads/${id}`);
+const forCustomers = (service) => {
+  const { photoIds, ...rest } = service;
+  return { ...rest, photoUrls: photoUrls(service) };
+};
 
+// C1, C2: browse a category, search, and filter by district, price and rating.
 app.get("/api/services", safe(async (req, res) => {
-  const { category, filter } = req.query;
+  const { category, filter, district, sort } = req.query;
   const q = String(req.query.q ?? "").trim().toLowerCase();
-  let list = await catalogue();
+  const minPrice = Number(req.query.minPrice) || 0;
+  const maxPrice = Number(req.query.maxPrice) || Infinity;
+  const minRating = Number(req.query.minRating) || 0;
+  let list = (await loadCatalogue()).visible;
   if (category) list = list.filter((service) => service.category === category);
   if (q) {
     // Every word must appear somewhere; "in" and "near" are ignored so "tents in Mukono" works.
@@ -61,39 +75,50 @@ app.get("/api/services", safe(async (req, res) => {
       return words.every((word) => haystack.includes(word));
     });
   }
+  // "other": vendors outside the listed districts.
+  if (district === "other") list = list.filter((service) => !DISTRICTS.includes(service.district));
+  else if (district) list = list.filter((service) => service.district === district);
+  list = list.filter((service) => service.price >= minPrice && service.price <= maxPrice && (service.rating || 0) >= minRating);
   if (filter === "under500k") list = list.filter((service) => service.price < 500000);
   if (filter === "top") list = list.filter((service) => service.rating >= 4.7);
   if (filter === "offers") list = list.filter((service) => service.wasPrice);
-  res.json(list);
+  if (sort === "price") list = [...list].sort((a, b) => a.price - b.price);
+  if (sort === "-price") list = [...list].sort((a, b) => b.price - a.price);
+  if (sort === "rating") list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  res.json(list.map(forCustomers));
 }));
 
+// C3: one listing, with the settings a host can choose for it.
 app.get("/api/services/:id", safe(async (req, res) => {
-  const service = (await catalogue()).find((s) => s.id === req.params.id);
+  const service = (await loadCatalogue()).visible.find((s) => s.id === req.params.id);
   if (!service) return res.status(404).json({ error: "We could not find that service." });
-  res.json(service);
+  res.json({ ...forCustomers(service), options: OPTIONS[service.category] ?? [] });
 }));
 
 app.get("/api/offers", safe(async (_req, res) => {
-  const list = await catalogue();
-  res.json(OFFER_IDS.map((id) => list.find((s) => s.id === id)).filter(Boolean));
+  const list = (await loadCatalogue()).visible;
+  res.json(OFFER_IDS.map((id) => list.find((s) => s.id === id)).filter(Boolean).map(forCustomers));
 }));
 
-app.post("/api/quote", (req, res) => {
-  const { event, items } = req.body ?? {};
+// D1: the grand total for a plan. `choices` holds each service's settings.
+app.post("/api/quote", safe(async (req, res) => {
+  const { event, items, choices } = req.body ?? {};
   const errors = validateEvent(event);
   if (errors.length) return res.status(400).json({ error: errors.join(" ") });
-  const { services, error } = resolveItems(items);
-  if (error) return res.status(400).json({ error });
-  res.json(buildQuote(services, event));
-});
+  if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "Your plan is empty." });
+  const catalogue = await loadCatalogue();
+  const services = [...new Set(items)].map((id) => catalogue.byId.get(id));
+  if (services.some((s) => !s)) return res.status(400).json({ error: "A service in your plan is no longer available." });
+  res.json(buildQuote(services, event, choices ?? {}));
+}));
 
-// Every way of filling each category for this event, with what it would cost all-in before the
-// platform fee. The budget planner and the compare page are built on this.
+// Every way of filling each category for this event, at its listed settings, with what it would
+// cost all-in before the platform fee. The budget planner and the compare page are built on this.
 app.post("/api/options", safe(async (req, res) => {
   const { event } = req.body ?? {};
   const errors = validateEvent(event);
   if (errors.length) return res.status(400).json({ error: errors.join(" ") });
-  const list = await catalogue();
+  const list = (await loadCatalogue()).visible;
   const categories = CATEGORIES.map((category) => ({
     ...category,
     options: list.filter((service) => service.category === category.id)
@@ -108,93 +133,49 @@ app.post("/api/options", safe(async (req, res) => {
 }));
 
 app.get("/api/services/:id/availability", safe(async (req, res) => {
-  if (!byId.has(req.params.id)) return res.status(404).json({ error: "We could not find that service." });
+  const catalogue = await loadCatalogue();
+  if (!catalogue.byId.has(req.params.id)) return res.status(404).json({ error: "We could not find that service." });
   const month = String(req.query.month ?? "");
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return res.status(400).json({ error: "Choose a month." });
-  res.json({ month, booked: bookedDays(req.params.id, month, await loadBookings(), await loadBusy()) });
+  res.json({ month, booked: bookedDays(req.params.id, month, await loadBookings(), await loadBusy(catalogue)) });
 }));
 
+// C6: whether each vendor in a plan is free on the date, the nearest date when all are, and
+// similar vendors who are free that day for any who are not.
 app.post("/api/availability", safe(async (req, res) => {
   const { date, items } = req.body ?? {};
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "Choose an event date." });
-  const { services, error } = resolveItems(items);
-  if (error) return res.status(400).json({ error });
-  const ids = services.map((service) => service.id);
+  if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "Your plan is empty." });
+  const catalogue = await loadCatalogue();
+  const ids = [...new Set(items)].filter((id) => catalogue.byId.has(id));
   const bookings = await loadBookings();
-  const busy = await loadBusy();
+  const busy = await loadBusy(catalogue);
   const clash = unavailable(ids, date, bookings, busy);
-  res.json({ date, unavailable: clash, nextFree: clash.length ? nextFreeDate(ids, date, bookings, busy) : date });
-}));
-
-app.post("/api/bookings", safe(async (req, res) => {
-  const { event, items, payment, customer, deposit } = req.body ?? {};
-  const errors = validateEvent(event);
-  if (errors.length) return res.status(400).json({ error: errors.join(" ") });
-  const { services, error } = resolveItems(items);
-  if (error) return res.status(400).json({ error });
-
-  // Signed in: the booking belongs to the account, and only that account can open it.
-  // Not signed in (the phone-app version): anyone with the receipt number can open it, as before.
-  const owner = await currentCustomer(req);
-  const { method, error: paymentError } = readPayment(payment);
-  if (paymentError) return res.status(400).json({ error: paymentError });
-
-  const bookings = await loadBookings();
-  const hidden = await hiddenServiceIds();
-  if (services.some((service) => hidden.has(service.id))) return res.status(409).json({ error: "A service in your plan is no longer available. Remove it and try again." });
-  const clash = unavailable(services.map((service) => service.id), event.date, bookings, await loadBusy());
-  if (clash.length) {
-    const names = clash.map((id) => byId.get(id).vendor).join(", ");
-    return res.status(409).json({ error: `Not free on that date: ${names}. Choose another date or swap the service.` });
+  const similar = {};
+  for (const id of clash) {
+    const taken = catalogue.byId.get(id);
+    similar[id] = catalogue.visible
+      .filter((s) => s.category === taken.category && s.id !== id && !ids.includes(s.id))
+      .filter((s) => !unavailable([s.id], date, bookings, busy).length)
+      .sort((a, b) => Math.abs(a.price - taken.price) - Math.abs(b.price - taken.price) || (b.rating || 0) - (a.rating || 0))
+      .slice(0, 3)
+      .map(({ id: sid, name, vendor, district, price, unit, rating, reviews }) => ({ id: sid, name, vendor, district, price, unit, rating, reviews }));
   }
-
-  // No money moves here. Connect a payment provider (MTN MoMo, Airtel Money, a card gateway) at this point.
-  const quote = buildQuote(services, event);
-  const booking = {
-    id: `CLB-${String(FIRST_RECEIPT + bookings.length).padStart(6, "0")}`,
-    createdAt: new Date().toISOString(),
-    customer: owner ? owner.name : String(customer ?? "").slice(0, 60),
-    customerId: owner?.id ?? null,
-    event,
-    quote,
-    // With `deposit`, part is paid now and the balance on the day; otherwise everything is paid now.
-    total: quote.total,
-    paid: deposit ? depositFor(quote.total) : quote.total,
-    balance: deposit ? quote.total - depositFor(quote.total) : 0,
-    method: method.name,
-    vendors: services.map((service) => ({
-      category: categoryById.get(service.category).name,
-      vendor: service.vendor,
-      serviceId: service.id,
-      status: service.instantConfirm ? "Confirmed" : "Waiting",
-    })),
-  };
-  await write("bookings", [booking, ...bookings]);
-  res.status(201).json(booking);
-}));
-
-// Bookings without an owner only. A signed-in customer's own bookings come from /api/me/bookings.
-app.get("/api/bookings", safe(async (_req, res) => res.json((await loadBookings()).filter((b) => !b.customerId))));
-
-app.get("/api/bookings/:id", safe(async (req, res) => {
-  const booking = (await loadBookings()).find((b) => b.id === req.params.id);
-  if (!booking) return res.status(404).json({ error: "We could not find that booking." });
-  if (!(await mayUse(req, booking))) return res.status(403).json({ error: "This booking belongs to another account. Sign in as its owner." });
-  res.json(booking);
+  res.json({ date, unavailable: clash, nextFree: clash.length ? nextFreeDate(ids, date, bookings, busy) : date, similar });
 }));
 
 // What a vendor scanning a receipt's QR code may see: that the booking is real, what was booked
-// and whether it is paid. Not the customer's phone number or messages.
+// and whether it is paid. Not the host's phone number or messages.
 app.get("/api/bookings/:id/verify", safe(async (req, res) => {
   const booking = (await loadBookings()).find((b) => b.id === req.params.id);
-  if (!booking) return res.status(404).json({ error: "We could not find that booking." });
-  const { id, event, quote, total, paid, balance, method, vendors } = booking;
+  if (!booking || booking.status === "awaiting_payment") return res.status(404).json({ error: "We could not find that booking." });
+  const { id, event, quote, total, paid, balance, method, vendors, status } = booking;
   res.json({
-    id, total: total ?? paid, paid, balance: balance ?? 0, method,
+    id, status, total, paid, balance: balance ?? 0, method,
     customer: String(booking.customer ?? "").split(" ")[0],
     event: { type: event.type, date: event.date, district: event.district, guests: event.guests },
-    quote: { lines: quote.lines },
-    vendors,
+    quote: { lines: quote.lines.map(({ id: lineId, name, vendor, detail, settings }) => ({ id: lineId, name, vendor, detail, settings })) },
+    vendors: vendors.map(({ serviceId, vendor, status: lineStatus }) => ({ serviceId, vendor, status: lineStatus })),
   });
 }));
 
@@ -221,7 +202,7 @@ app.get("/api/bookings/:id/receipt", safe(async (req, res) => {
     row("Labour and setup", money(quote.labour)),
     row("Transport", money(quote.transport)),
     row(`Platform fee (${Math.round(quote.feeRate * 100)}%)`, money(quote.platformFee)),
-    row("GRAND TOTAL", money(quote.total)),
+    row("GRAND TOTAL", money(booking.total)),
     "",
     "Webale nnyo!",
     "",
@@ -258,13 +239,15 @@ app.post("/api/pledges/:key", safe(async (req, res) => {
   res.status(201).json(next);
 }));
 
-addExtras(app, { safe, loadBookings, byId, categoryById });
-addStaff(app, { safe, loadBookings });
+addOrders(app);
+addExtras(app);
+addStaff(app);
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found." }));
 
 app.use((error, _req, res, _next) => {
   console.error(error);
+  if (error?.type === "entity.too.large") return res.status(413).json({ error: "That is too large to send." });
   res.status(500).json({ error: "Something went wrong on our side. Please try again." });
 });
 

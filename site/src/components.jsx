@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Scale } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, Scale } from "lucide-react";
 import { toISODate } from "../../src/format.js";
 import { useLoad } from "../../src/api.js";
 import { more } from "./extra.js";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Building2, CakeSlice, Camera, Gamepad2, Martini, Mic, Search, Shirt, Speaker, Tent, Utensils, X } from "lucide-react";
 import { discountPercent, money } from "../../src/format.js";
 import { usePlan } from "../../src/plan.jsx";
 import { PHOTOS } from "./photos.js";
-import { useLang, useT } from "./i18n.jsx";
 import { useAccount } from "./account.jsx";
 import { COMPARE_LIMIT, useCompare } from "./compare.jsx";
 
@@ -59,9 +58,59 @@ export function Logo({ className = "" }) {
   return <span className={`logo ${className}`}><Mark /><span className="wordmark">CELEBRATE</span></span>;
 }
 
+/**
+ * E2 and D5: the signed-in host's notifications (payments, vendors' answers, reminders 7 days and
+ * 1 day before). A real backend also sends these by SMS. Read status is kept on this device.
+ */
+function Notifications() {
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const [seen, setSeen] = useState(() => {
+    try {
+      return localStorage.getItem("celebrate.seen.v1") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const { data } = useLoad(() => more.notifications().catch(() => []), [pathname]);
+  const unread = (data ?? []).filter((note) => note.at > seen).length;
+  const toggle = () => {
+    if (!open && data?.length) {
+      const latest = data[0].at;
+      setSeen(latest);
+      try {
+        localStorage.setItem("celebrate.seen.v1", latest);
+      } catch {
+        // Counted again next visit.
+      }
+    }
+    setOpen(!open);
+  };
+  useEffect(() => setOpen(false), [pathname]);
+
+  return (
+    <div className="bell">
+      <button className="icon-button" onClick={toggle} aria-expanded={open} aria-label={`Notifications${unread ? `, ${unread} new` : ""}`}>
+        <Bell size={17} strokeWidth={1.6} />
+        {unread > 0 && <span className="bell-count">{unread}</span>}
+      </button>
+      {open && (
+        <div className="bell-list" role="dialog" aria-label="Notifications">
+          {!data?.length && <p className="quiet">Nothing yet. Payments, vendors' answers and reminders appear here.</p>}
+          {data?.slice(0, 12).map((note) => (
+            <Link key={note.id} to={note.link ?? "/bookings"} className={note.at > seen ? "new" : ""}>
+              <span>{note.text}</span>
+              <small className="quiet">{new Date(note.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Header({ overHero }) {
   const { items } = usePlan();
-  const { lang, setLang, t } = useLang();
   const { customer } = useAccount();
   const navigate = useNavigate();
   const [atTop, setAtTop] = useState(true);
@@ -85,27 +134,27 @@ export function Header({ overHero }) {
   return (
     <header className={`header ${light ? "light" : ""}`}>
       <nav className="header-side" aria-label="Main">
-        <NavLink to="/services">{t("Services")}</NavLink>
-        <NavLink to="/budget">{t("Budget")}</NavLink>
-        <Link to="/#offers" className="hide-small">{t("Offers")}</Link>
-        <NavLink to="/vendors" className="hide-small">{t("For vendors")}</NavLink>
+        <NavLink to="/services">Services</NavLink>
+        <NavLink to="/budget">Budget</NavLink>
+        <Link to="/#offers" className="hide-small">Offers</Link>
+        <NavLink to="/vendors" className="hide-small">For vendors</NavLink>
+        <NavLink to="/about" className="hide-small">About</NavLink>
+        <NavLink to="/blog" className="hide-small">Blog</NavLink>
       </nav>
       <Link to="/" className={`brand ${overHero && atTop ? "hidden" : ""}`} aria-label="Celebrate, home"><Logo /></Link>
       <nav className="header-side right" aria-label="Your account">
         <button className="icon-button" onClick={() => setSearching(!searching)} aria-label={searching ? "Close search" : "Search services"} aria-expanded={searching}>
           {searching ? <X size={16} strokeWidth={1.4} /> : <Search size={16} strokeWidth={1.4} />}
         </button>
-        <button className="lang" onClick={() => setLang(lang === "en" ? "lg" : "en")} aria-label={lang === "en" ? "Kyusa olulimi: Luganda" : "Change language: English"}>
-          <span className={lang === "en" ? "on" : ""}>EN</span><span className={lang === "lg" ? "on" : ""}>LG</span>
-        </button>
-        <NavLink to="/account" className="hide-small">{customer ? customer.name.split(" ")[0] : t("Log in")}</NavLink>
-        <NavLink to="/bookings" className="hide-small">{t("Bookings")}</NavLink>
-        <NavLink to="/plan" className="plan-pill"><span className="hide-tiny">{t("My plan")}</span> <span className="count">{items.length}</span></NavLink>
+        {customer && <Notifications />}
+        <NavLink to="/account" className="hide-small">{customer ? customer.name.split(" ")[0] : "Log in"}</NavLink>
+        <NavLink to="/bookings" className="hide-small">Bookings</NavLink>
+        <NavLink to="/plan" className="plan-pill"><span className="hide-tiny">My plan</span> <span className="count">{items.length}</span></NavLink>
       </nav>
       {searching && (
         <form className="search-row" onSubmit={submit} role="search">
           <input autoFocus type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Try: tents in Mukono" aria-label="Search services" />
-          <button className="link-caps">{t("Search")}</button>
+          <button className="link-caps">Search</button>
         </form>
       )}
     </header>
@@ -113,7 +162,6 @@ export function Header({ overHero }) {
 }
 
 export function Footer() {
-  const t = useT();
   return (
     <footer className="footer">
       <div className="footer-top">
@@ -123,26 +171,30 @@ export function Footer() {
         </div>
         <nav aria-label="Plan">
           <h2 className="caps">Plan</h2>
-          <Link to="/services">{t("Services")}</Link>
-          <Link to="/budget">{t("Budget planner")}</Link>
-          <Link to="/#offers">{t("Offers")}</Link>
-          <Link to="/plan">{t("My plan")}</Link>
+          <Link to="/services">Services</Link>
+          <Link to="/budget">Budget planner</Link>
+          <Link to="/#offers">Offers</Link>
+          <Link to="/plan">My plan</Link>
         </nav>
         <nav aria-label="Your account">
           <h2 className="caps">You</h2>
-          <Link to="/account">{t("Account")}</Link>
-          <Link to="/bookings">{t("Bookings")}</Link>
+          <Link to="/account">Account</Link>
+          <Link to="/bookings">Bookings</Link>
           <Link to="/bookings#visits">Appointments</Link>
         </nav>
         <nav aria-label="Celebrate">
           <h2 className="caps">Celebrate</h2>
-          <Link to="/vendors">{t("List my business")}</Link>
+          <Link to="/about">About us</Link>
+          <Link to="/team">Our team</Link>
+          <Link to="/blog">Blog</Link>
+          <Link to="/vendors">List my business</Link>
           <Link to="/vendor">Vendor sign in</Link>
           <Link to="/admin">Admin</Link>
+          <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
         </nav>
       </div>
-      <p className="footer-small">Kampala · Mukono · Wakiso · Entebbe · Jinja · Photographs from Pexels, for illustration.</p>
+      <p className="footer-small">Central · Eastern · Northern · Western Uganda · Photographs from Pexels, for illustration.</p>
       <p className="footer-word" aria-hidden="true">CELEBRATE</p>
     </footer>
   );
@@ -159,14 +211,16 @@ export function ServiceCard({ service, index = 0 }) {
     <div className="piece-wrap">
       <Link to={`/service/${service.id}`} className="piece">
         <div className="piece-art">
-          <Art category={service.category} photo={service.id} seed={index + service.name.length} label={service.photoCaption} />
+          {service.photoUrls?.length
+            ? <div className="art art-photo"><img className="in" src={service.photoUrls[0]} alt={service.name} loading="lazy" /></div>
+            : <Art category={service.category} photo={service.id} seed={index + service.name.length} label={service.photoCaption} />}
           {off > 0 && <span className="tag">{off}% off</span>}
           {items.includes(service.id) && <span className="tag in-plan">In my plan</span>}
           <span className="piece-view">View</span>
         </div>
         <h3>{service.name}</h3>
         <p className="piece-price">{money(service.price)} <span className="quiet">/ {service.unit}</span></p>
-        <p className="quiet">{service.vendor} · {service.district} · ★ {service.rating}</p>
+        <p className="quiet">{service.vendor} · {service.district} · {service.reviews ? `★ ${service.rating}` : "New"}</p>
       </Link>
       <label className={`compare-tick ${ticked ? "on" : ""}`}>
         <input type="checkbox" checked={ticked} disabled={full} onChange={() => compare.toggle(service.id)} />
@@ -179,14 +233,13 @@ export function ServiceCard({ service, index = 0 }) {
 /** A bar along the bottom once something is ticked to compare. */
 export function CompareBar() {
   const { ids, clear } = useCompare();
-  const t = useT();
   if (!ids.length) return null;
   return (
     <div className="compare-bar" role="region" aria-label="Compare">
       <p><Scale size={18} aria-hidden="true" /> {ids.length} of {COMPARE_LIMIT} chosen</p>
       <button className="link-quiet" onClick={clear}>Clear</button>
       {ids.length > 1
-        ? <Link to={`/compare?ids=${ids.join(",")}`} className="button fit sun">{t("Compare")}</Link>
+        ? <Link to={`/compare?ids=${ids.join(",")}`} className="button fit sun">Compare</Link>
         : <span className="quiet">Tick one more to compare</span>}
     </div>
   );
@@ -237,7 +290,6 @@ export function Calendar({ serviceId, value, onPick }) {
 
 /** The loader: the drum beats and its three sparks pop in turn. */
 export function Loading({ label = "Loading" }) {
-  const t = useT();
   return (
     <div className="loader" role="status">
       <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -253,7 +305,7 @@ export function Loading({ label = "Loading" }) {
           <ellipse cx="32" cy="27" rx="15" ry="5.500" fill="#fff7e6" />
         </g>
       </svg>
-      <p>{t(label)}…</p>
+      <p>{label}…</p>
     </div>
   );
 }
@@ -268,9 +320,8 @@ export const PageHead = ({ eyebrow, title, children }) => (
 );
 
 /** The itemised plan with every cost and the grand total. */
-export function Summary({ quote, categories, onRemove }) {
-  const t = useT();
-  const titleFor = (id) => t(categories?.find((c) => c.id === id)?.title ?? "");
+export function Summary({ quote, categories, onRemove, deposit }) {
+  const titleFor = (id) => (categories?.find((c) => c.id === id)?.title ?? "");
   return (
     <>
       <ul className="lines">
@@ -279,7 +330,13 @@ export function Summary({ quote, categories, onRemove }) {
             <div>
               <p>{titleFor(line.category)}</p>
               <p className="quiet">{line.detail} · {line.vendor}</p>
-              {onRemove && <button className="link-quiet" onClick={() => onRemove(line.id)} aria-label={`Remove ${line.name}`}>{t("Remove")}</button>}
+              {line.settings && <p className="line-settings">{line.settings}</p>}
+              {onRemove && (
+                <p className="line-actions">
+                  <Link className="link-quiet" to={`/service/${line.id}`}>Change settings</Link>
+                  <button className="link-quiet" onClick={() => onRemove(line.id)} aria-label={`Remove ${line.name}`}>Remove</button>
+                </p>
+              )}
             </div>
             <p className="num">{money(line.amount)}</p>
           </li>
@@ -292,9 +349,10 @@ export function Summary({ quote, categories, onRemove }) {
         <div><dt>Platform fee ({Math.round(quote.feeRate * 100)}%)</dt><dd>{money(quote.platformFee)}</dd></div>
       </dl>
       <div className="grand">
-        <p className="caps">{t("Grand total")}</p>
+        <p className="caps">Grand total</p>
         <p className="grand-total">{money(quote.total)}</p>
         <p className="quiet">No hidden costs. This is all you pay.</p>
+        {deposit && <p className="quiet">Pay {money(Math.round(quote.total * deposit))} now to book; the rest, {money(quote.total - Math.round(quote.total * deposit))}, on the day.</p>}
       </div>
     </>
   );
@@ -427,6 +485,99 @@ export function BusyCalendar({ busy, events, onToggle }) {
         })}
       </div>
       <p className="calendar-key"><span className="key free" /> Free <span className="key busy" /> Busy (you) <span className="key event" /> Event booked</p>
+    </div>
+  );
+}
+
+/**
+ * A file that only some people may see (a vendor's ID, complaint evidence). It is fetched with the
+ * viewer's sign-in and shown from memory; `token` is that sign-in.
+ */
+export function PrivateFile({ file, token }) {
+  const [url, setUrl] = useState("");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let made = "";
+    fetch(file.url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((response) => (response.ok ? response.blob() : Promise.reject()))
+      .then((blob) => {
+        made = URL.createObjectURL(blob);
+        setUrl(made);
+      })
+      .catch(() => setFailed(true));
+    return () => made && URL.revokeObjectURL(made);
+  }, [file.url, token]);
+  if (failed) return <span className="quiet">{file.name} (could not be opened)</span>;
+  if (!url) return <span className="quiet">Opening {file.name}…</span>;
+  return file.type.startsWith("image/")
+    ? <a href={url} target="_blank" rel="noreferrer" className="file-thumb"><img src={url} alt={file.name} /></a>
+    : <a href={url} download={file.name} className="chip">Open {file.name}</a>;
+}
+
+/** A button that picks files and uploads them; calls onAdded with each uploaded file's details. */
+export function FileButton({ label, purpose, accept = "image/*,application/pdf", multiple = false, upload, onAdded, onError }) {
+  const [busy, setBusy] = useState(false);
+  const pick = async (event) => {
+    const files = [...event.target.files];
+    event.target.value = "";
+    setBusy(true);
+    try {
+      const { prepareFile } = await import("./upload.js");
+      for (const file of files) onAdded(await upload(await prepareFile(file, purpose)));
+    } catch (err) {
+      onError?.(err.message);
+    }
+    setBusy(false);
+  };
+  return (
+    <label className={`chip file-button ${busy ? "busy" : ""}`}>
+      <input type="file" accept={accept} multiple={multiple} onChange={pick} disabled={busy} />
+      {busy ? "Adding…" : label}
+    </label>
+  );
+}
+
+/**
+ * A district picker with "Other…" at the end, which opens a box to type the area. `value` is the
+ * district or the typed place; `onChange` gets the new value once it is a usable name.
+ */
+export function AreaSelect({ label = "District", value, onChange, districts = [], disabled = false }) {
+  const listed = districts.includes(value);
+  const [other, setOther] = useState(Boolean(value) && !listed);
+  const [typed, setTyped] = useState(listed ? "" : value ?? "");
+  const usable = (text) => /^[A-Za-z][A-Za-z .'-]{1,39}$/.test(text.trim());
+
+  const pick = (choice) => {
+    if (choice === "__other") {
+      setOther(true);
+      if (usable(typed)) onChange(typed.trim());
+    } else {
+      setOther(false);
+      onChange(choice);
+    }
+  };
+  const type = (text) => {
+    setTyped(text);
+    if (usable(text)) onChange(text.trim().replace(/\s+/g, " "));
+  };
+
+  return (
+    <div className="field">
+      <label className="field">
+        <span className="caps">{label}</span>
+        <select value={other ? "__other" : value} onChange={(e) => pick(e.target.value)} disabled={disabled}>
+          {!value && !other && <option value="" disabled>Choose…</option>}
+          {districts.map((d) => <option key={d} value={d}>{d}</option>)}
+          <option value="__other">Other…</option>
+        </select>
+      </label>
+      {other && (
+        <label className="field">
+          <span className="caps">Your area</span>
+          <input value={typed} onChange={(e) => type(e.target.value)} maxLength={40} placeholder="e.g. Kalangala" autoFocus disabled={disabled} aria-invalid={Boolean(typed) && !usable(typed)} />
+          {typed && !usable(typed) && <small className="field-error">Use letters only, at least two.</small>}
+        </label>
+      )}
     </div>
   );
 }

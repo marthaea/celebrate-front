@@ -5,11 +5,14 @@ const SECTIONS = [
   {
     title: "What we collect",
     points: [
-      "Your name, mobile number and password, when you open an account. The password is stored scrambled (hashed), so no one at Celebrate can read it.",
+      "Your name and mobile number, when you open an account, and when you accepted our terms. We send a one-time code by SMS to that number to sign you in; there is no password.",
       "The name given when someone makes a pledge on a shared plan.",
       "Your event details: the type of event, date, district, number of guests and the services you choose.",
       "Your mobile money number, only when you pay with mobile money. We never see or store your PIN, and we do not store card numbers.",
       "Messages you send to vendors through Celebrate.",
+      "Your event's location, so vendors can deliver and set up.",
+      "If you report a problem after your event: what you tell us and any photos or files you add as evidence.",
+      "If you list a business: its details and contacts, a registration certificate or national ID, photos of your work, your services and prices, and your acceptance of the vendor agreement.",
       "Pledges made towards a shared plan: the name given, the amount and what it is for.",
     ],
   },
@@ -32,9 +35,11 @@ const SECTIONS = [
   {
     title: "Who sees it",
     points: [
-      "The vendors on your booking see your name, your event details and the messages you send them. They never see your mobile number.",
+      "The vendors on your booking see your name, your event details and location, your settings for their service and the messages you send them. They never see your mobile number.",
+      "A vendor's registration certificate or national ID is seen only by that vendor and the Celebrate team. Photos of their work are shown on their listings.",
+      "Evidence for a complaint is seen by the host, the vendor concerned and the Celebrate team.",
       "Your bookings, receipts, messages and appointments can only be opened when you are signed in to your account. A vendor scanning your receipt's QR code sees what was booked and whether it is paid, and your first name.",
-      "The Celebrate team can see your account, bookings and payments, to run the service and to help you, for example by resetting a forgotten password after checking it is you.",
+      "The Celebrate team can see your account, bookings and payments, to run the service, to help you, and to decide cancellations and complaints fairly.",
       "Vendors and customers do not receive each other's phone numbers or email addresses. Phone numbers and email addresses typed into a message are removed before it is delivered.",
       "Anyone with the link to a shared plan can see that plan and the pledges made to it. Share the link only with people you trust.",
       "Cloudflare receives technical details about your browser when it runs the login check, under its own privacy policy.",

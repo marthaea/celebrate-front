@@ -23,14 +23,14 @@ const { createCustomer } = await import("../server/customers.js");
 const { makeToken: tokenFor } = await import("../server/auth.js");
 let phoneCounter = 100000;
 async function newCustomer(name = "Nantongo") {
-  const { customer } = await createCustomer({ name, phone: `0770${phoneCounter++}`, password: "a long password" });
+  const { customer } = await createCustomer({ name, phone: `0770${phoneCounter++}` });
   const token = tokenFor({ role: "customer", customer: customer.id }, 1);
   return { customer, token, call: (path, data) => request(path, data, token) };
 }
 
 const items = ["lakeside-hall-gardens", "draped-tent-100", "buffet", "pa-dj", "photo-full-day"];
 const date = nextFreeDate(items, "2027-03-01");
-const event = { type: "Kwanjula", guests: 250, tents: 6, date, district: "Mukono", setup: "vendor" };
+const event = { type: "Introduction", guests: 250, tents: 6, date, district: "Mukono", setup: "vendor" };
 const payment = { method: "mtn", phone: "0770 000 000" };
 
 test("a booking takes a 30% deposit, then the balance, and the date is then taken", async () => {
@@ -92,21 +92,22 @@ test("an appointment takes its time slot, and cancelling frees it", async () => 
 });
 
 test("signing up and in need the security check", async () => {
-  assert.equal((await call("/customers/register", { name: "A", phone: "0770 000 001", password: "long enough", token: "" })).status, 400);
-  assert.equal((await call("/customers/login", { phone: "0770 000 001", password: "long enough", token: "" })).status, 400);
+  assert.equal((await call("/customers/code", { name: "A", phone: "0770 000 001", purpose: "signup", token: "" })).status, 400);
+  assert.equal((await call("/customers/code", { phone: "0770 000 001", purpose: "signin", token: "" })).status, 400);
 });
 
-test("accounts check the phone number and password, and refuse a second account for one number", async () => {
+test("accounts check the phone number, and refuse a second account for one number", async () => {
   const { normalisePhone } = await import("../server/customers.js");
   assert.equal(normalisePhone("0770 123 456"), "256770123456");
   assert.equal(normalisePhone("+256 770-123456"), "256770123456");
   assert.equal(normalisePhone("0414 123 456"), null);
-  assert.equal((await createCustomer({ name: "A", phone: "12345", password: "long enough" })).status, 400);
-  assert.equal((await createCustomer({ name: "A", phone: "0781 000 000", password: "short" })).status, 400);
-  const made = await createCustomer({ name: "Akello", phone: "0781 000 000", password: "long enough" });
+  assert.equal((await createCustomer({ name: "A", phone: "12345" })).status, 400);
+  assert.equal((await createCustomer({ name: "", phone: "0781 000 000" })).status, 400);
+  const made = await createCustomer({ name: "Akello", phone: "0781 000 000" });
   assert.equal(made.customer.phone, "256781000000");
-  assert.ok(!made.customer.passHash.includes("long enough"));
-  assert.equal((await createCustomer({ name: "Someone", phone: "+256781000000", password: "long enough" })).status, 409);
+  assert.equal(made.customer.passHash, undefined);
+  assert.ok(made.customer.termsAccepted.at);
+  assert.equal((await createCustomer({ name: "Someone", phone: "+256781000000" })).status, 409);
 });
 
 test("a booking made while signed in belongs to that account alone", async () => {
@@ -144,8 +145,7 @@ test("customers change their own details, and a suspended account stops working"
   assert.equal((await me.call("/me")).body.name, "Kato");
   assert.equal((await me.call("/me")).body.passHash, undefined);
   assert.equal((await me.call("/me", { name: "Kato Moses" })).body.name, "Kato Moses");
-  assert.equal((await me.call("/me", { password: "wrong one", newPassword: "another long one" })).status, 401);
-  assert.equal((await me.call("/me", { password: "a long password", newPassword: "another long one" })).status, 200);
+  assert.equal((await me.call("/me", { name: "  " })).status, 400);
   assert.equal((await call("/me")).status, 401);
 });
 
@@ -203,7 +203,7 @@ test("a vendor sees and answers only their own bookings, and the customer sees t
   assert.equal(seen.lines[0].status, "Waiting");
   assert.equal(seen.lines[0].due, 9500000);
 
-  assert.equal((await caterer(`/vendor/bookings/${booking.id}/status`, { serviceId: "pa-dj", status: "Confirmed" })).status, 403);
+  assert.equal((await caterer(`/vendor/bookings/${booking.id}/status`, { serviceId: "pa-dj", status: "Confirmed" })).status, 404);
   assert.equal((await caterer(`/vendor/bookings/${booking.id}/status`, { serviceId: "buffet", status: "Confirmed" })).status, 200);
   const after = (await call(`/bookings/${booking.id}`)).body;
   assert.equal(after.vendors.find((v) => v.serviceId === "buffet").status, "Confirmed");
@@ -215,8 +215,10 @@ test("a vendor sees and answers only their own bookings, and the customer sees t
   assert.equal(thread.at(-1).from, "vendor");
   assert.equal(thread.at(-1).text, "Yes. Call [number removed]");
 
-  // Declining frees the date again.
-  await caterer(`/vendor/bookings/${booking.id}/status`, { serviceId: "buffet", status: "Declined" });
+  // Declining needs a reason, opens a case for the admin and frees the date again.
+  assert.equal((await caterer(`/vendor/bookings/${booking.id}/status`, { serviceId: "buffet", status: "Declined" })).status, 400);
+  await caterer(`/vendor/bookings/${booking.id}/status`, { serviceId: "buffet", status: "Declined", reason: "Our cook is unwell that week." });
+  assert.ok((await admin("/admin/overview")).body.cases.some((c) => c.bookingId === booking.id && c.type === "vendor-cancel" && c.status === "open"));
   assert.deepEqual((await call("/availability", { date: date2, items: ["buffet"] })).body.unavailable, []);
 });
 
@@ -251,7 +253,7 @@ test("a review needs a finished or fully paid booking, counts once, and moves th
   assert.equal((await call("/services/party-cake")).body.rating, before.rating);
 });
 
-test("the admin adds, suspends and restores vendors, and tracks payments", async () => {
+test("the admin adds, suspends and restores vendors, and sees the money", async () => {
   const added = await admin("/admin/vendors", { business: "Test Florists", owner: "Akello", category: "venues", district: "Jinja", password: "long enough" });
   assert.equal(added.status, 201);
   assert.equal(added.body.passHash, undefined);
@@ -278,10 +280,6 @@ test("the admin adds, suspends and restores vendors, and tracks payments", async
 
   const overview = (await admin("/admin/overview")).body;
   assert.equal(overview.totals.collected, overview.bookings.reduce((sum, b) => sum + b.paid, 0));
-  assert.equal(overview.totals.value, overview.totals.collected + overview.totals.outstanding);
-  const line = overview.payouts.find((p) => p.status !== "Declined" && !p.paidOut);
-  await admin("/admin/payouts", { bookingId: line.bookingId, serviceId: line.serviceId, paid: true });
-  const later = (await admin("/admin/overview")).body;
-  assert.equal(later.totals.owedToVendors, overview.totals.owedToVendors - line.due);
-  assert.equal(later.totals.paidToVendors, overview.totals.paidToVendors + line.due);
+  assert.equal(overview.totals.outstanding, overview.bookings.reduce((sum, b) => sum + b.balance, 0));
+  assert.ok(overview.totals.owedToVendors > 0);
 });

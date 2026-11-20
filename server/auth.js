@@ -48,12 +48,12 @@ export const claimsOf = (req) => readToken(String(req.headers.authorization ?? "
 
 // Slows down password guessing. Counts are per server process, so this is a first line of defence only.
 const attempts = new Map();
-export function tooManyAttempts(key) {
+export function tooManyAttempts(key, most = 10) {
   const now = Date.now();
   const recent = (attempts.get(key) ?? []).filter((at) => now - at < 10 * 60000);
   recent.push(now);
   attempts.set(key, recent);
-  return recent.length > 10;
+  return recent.length > most;
 }
 
 // Cloudflare Turnstile checks that a sign-in comes from a person. Until real keys are set

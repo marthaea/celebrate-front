@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, useLoad } from "../../../src/api.js";
-import { formatDate, toISODate } from "../../../src/format.js";
+import { formatDate, money, toISODate } from "../../../src/format.js";
 import { usePlan } from "../../../src/plan.jsx";
-import { ErrorNote, Loading, PageHead, Summary } from "../components.jsx";
+import { AreaSelect, ErrorNote, Loading, PageHead, Summary } from "../components.jsx";
 import { encodePlan, more } from "../extra.js";
-import { useT } from "../i18n.jsx";
+import { choicesForItems, useChoices } from "../choices.js";
 
 const SETUP = [
   { id: "vendor", title: "Done for me", hint: "Vendor sets up · labour added" },
@@ -14,16 +14,24 @@ const SETUP = [
 
 export default function Plan() {
   const plan = usePlan();
-  const t = useT();
   const { event, items } = plan;
   const meta = useLoad(api.meta, []);
   // Number fields are kept as text while typing; the plan updates once they are valid.
   const [guests, setGuests] = useState(String(event.guests));
   const [tents, setTents] = useState(String(event.tents));
+  const [choices, setChoice] = useChoices();
+  const mine = choicesForItems(choices, items);
+  const [location, setLocation] = useState(event.location ?? "");
   const quote = useLoad(
-    () => (items.length ? api.quote(event, items) : Promise.resolve(null)),
-    [items.join(","), JSON.stringify(event)]
+    () => (items.length ? more.quote(event, items, mine) : Promise.resolve(null)),
+    [items.join(","), JSON.stringify(event), JSON.stringify(mine)]
   );
+  // C6: swapping a vendor who is taken for a similar one who is free, keeping the settings.
+  const swap = (from, to) => {
+    if (choices[from]) setChoice(to, choices[from]);
+    plan.removeItem(from);
+    plan.addItem(to);
+  };
 
   // Which chosen services are already taken on the event date, and the nearest date when all are free.
   const clash = useLoad(
@@ -52,17 +60,17 @@ export default function Plan() {
   if (!items.length) {
     return (
       <div className="page centre-page">
-        <PageHead eyebrow="My plan" title={t("Your plan is empty")}>
+        <PageHead eyebrow="My plan" title="Your plan is empty">
           <p className="quiet">Add a venue, tents, catering or anything else, and we will add it all up into one grand total.</p>
         </PageHead>
-        <Link to="/services" className="button fit">{t("Browse services")}</Link>
+        <Link to="/services" className="button fit">Browse services</Link>
       </div>
     );
   }
 
   return (
     <div className="page">
-      <PageHead eyebrow="Steps 2 and 3 of 4 · Your event" title={t("Tell us the details")}>
+      <PageHead eyebrow="Steps 2 and 3 of 4 · Your event" title="Tell us the details">
         <p className="quiet">{event.type} · {event.guests.toLocaleString("en-US")} guests · {dateOk ? formatDate(event.date) : "date to choose"} · {event.district}</p>
       </PageHead>
 
@@ -74,48 +82,66 @@ export default function Plan() {
             <>
               <div className="fields">
                 <label className="field">
-                  <span className="caps">{t("Event type")}</span>
+                  <span className="caps">Event type</span>
                   <select value={event.type} onChange={(e) => plan.setEvent({ type: e.target.value })}>
-                    {meta.data.eventTypes.map((type) => <option key={type} value={type}>{t(type)}</option>)}
+                    {meta.data.eventTypes.map((type) => <option key={type} value={type}>{type}</option>)}
                   </select>
+                  {meta.data.eventNotes?.[event.type] && <small className="quiet">{meta.data.eventNotes[event.type]}</small>}
                 </label>
                 <label className="field">
-                  <span className="caps">{t("Number of guests")}</span>
+                  <span className="caps">Number of guests</span>
                   <input type="number" inputMode="numeric" min="1" max="5000" value={guests} onChange={(e) => changeGuests(e.target.value)} aria-invalid={!guestsOk} />
                   {!guestsOk && <small className="field-error">From 1 to 5,000 guests.</small>}
                 </label>
                 <label className="field">
-                  <span className="caps">{t("Event date")}</span>
+                  <span className="caps">Event date</span>
                   <input type="date" min={toISODate(new Date())} value={event.date} onChange={(e) => plan.setEvent({ date: e.target.value })} aria-invalid={!dateOk} />
                   {!dateOk && <small className="field-error">Choose a date that has not passed.</small>}
                 </label>
+                <AreaSelect value={event.district} districts={meta.data.districts} onChange={(district) => plan.setEvent({ district })} />
                 <label className="field">
-                  <span className="caps">{t("District")}</span>
-                  <select value={event.district} onChange={(e) => plan.setEvent({ district: e.target.value })}>
-                    {meta.data.districts.map((district) => <option key={district}>{district}</option>)}
-                  </select>
-                </label>
-                <label className="field">
-                  <span className="caps">{t("Tents needed")}</span>
+                  <span className="caps">Tents needed</span>
                   <input type="number" inputMode="numeric" min="0" max="100" value={tents} onChange={(e) => changeTents(e.target.value)} aria-invalid={!tentsOk} />
                   {!tentsOk && <small className="field-error">From 0 to 100 tents.</small>}
                 </label>
                 <label className="field">
-                  <span className="caps">{t("Chairs")}</span>
+                  <span className="caps">Chairs</span>
                   <input value={`${guestsOk ? Number(guests) : "–"} · auto-matched`} readOnly tabIndex={-1} className="matched" />
                 </label>
               </div>
 
+              <label className="field">
+                <span className="caps">Where exactly</span>
+                <input value={location} maxLength={120} placeholder="e.g. Seeta, the family home behind the church" onChange={(e) => setLocation(e.target.value)} onBlur={() => plan.setEvent({ location: location.trim() })} />
+                <small className="quiet">Your vendors see this to plan delivery and setup.</small>
+              </label>
+
               {taken.length > 0 && (
-                <div className="error" role="alert">
+                <div className="error clash" role="alert">
                   <p><strong>Not free on {formatDate(event.date)}:</strong> {takenNames.join(", ") || "one of your services"}.</p>
-                  <p>Pick another date, swap the service{clash.data.nextFree ? ", or move to the nearest date when everything is free." : "."}</p>
-                  {clash.data.nextFree && <button type="button" className="chip" onClick={() => plan.setEvent({ date: clash.data.nextFree })}>Move to {formatDate(clash.data.nextFree)}</button>}
+                  {taken.map((sid) => {
+                    const line = quote.data?.lines.find((l) => l.id === sid);
+                    const options = clash.data.similar?.[sid] ?? [];
+                    return (
+                      <div key={sid} className="swap">
+                        <p>{options.length ? `Similar and free that day, instead of ${line?.vendor ?? "it"}:` : `No similar vendor is free that day instead of ${line?.vendor ?? "it"}.`}</p>
+                        <ul>
+                          {options.map((other) => (
+                            <li key={other.id}>
+                              <span><strong>{other.vendor}</strong> · {other.name} · {money(other.price)} / {other.unit}{other.reviews ? ` · ★ ${other.rating}` : ""}</span>
+                              <button type="button" className="chip" onClick={() => swap(sid, other.id)}>Swap</button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                  {clash.data.nextFree && <p>Or keep everyone and move to the nearest date when all are free: <button type="button" className="chip" onClick={() => plan.setEvent({ date: clash.data.nextFree })}>Move to {formatDate(clash.data.nextFree)}</button></p>}
                 </div>
               )}
 
               <fieldset className="choices">
-                <legend className="caps">{t("Who handles setup?")}</legend>
+                <legend className="caps">Who handles setup?</legend>
                 {SETUP.map((option) => (
                   <label key={option.id} className={`choice ${event.setup === option.id ? "on" : ""}`}>
                     <input type="radio" name="setup" checked={event.setup === option.id} onChange={() => plan.setEvent({ setup: option.id })} />
@@ -130,16 +156,16 @@ export default function Plan() {
 
         <aside className="summary" aria-label="My plan">
           <div className="block-head">
-            <h2 className="caps">{t("One number. Every detail.")}</h2>
-            <Link to="/services" className="link-quiet">{t("Add more")}</Link>
+            <h2 className="caps">One number. Every detail.</h2>
+            <Link to="/services" className="link-quiet">Add more</Link>
           </div>
           <ErrorNote>{quote.error}</ErrorNote>
           {quote.loading && !quote.data && <Loading label="Adding it all up" />}
-          {quote.data && <Summary quote={quote.data} categories={meta.data?.categories} onRemove={plan.removeItem} />}
+          {quote.data && <Summary quote={quote.data} categories={meta.data?.categories} onRemove={plan.removeItem} deposit={meta.data?.depositRate} />}
           {formOk && quote.data
-            ? <Link to="/pay" className="button">{t("Pay now")}</Link>
-            : <button className="button" disabled>{t("Pay now")}</button>}
-          {quote.data && <Link to={`/share/${encodePlan({ event, items, host: plan.name })}`} className="button outline">Share and collect contributions</Link>}
+            ? <Link to="/pay" className="button">Pay now</Link>
+            : <button className="button" disabled>Pay now</button>}
+          {quote.data && <Link to={`/share/${encodePlan({ event, items, host: plan.name, choices: mine })}`} className="button outline">Share and collect contributions</Link>}
         </aside>
       </div>
     </div>

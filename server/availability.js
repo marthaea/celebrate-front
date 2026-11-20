@@ -1,19 +1,30 @@
-// When a service is free. A date is taken when the vendor has an event booked through the site
-// that day (and has not declined it), or has marked the day busy in their own calendar.
+// When a service is free. A date is taken when the vendor has a live booking that day, or has
+// marked the day busy in their own calendar. A booking still waiting for its payment holds its
+// services for a short while, so two people cannot pay for the same day at once.
+export const HOLD_MINUTES = 15;
+
+/** Whether a booking keeps its vendors' dates taken. */
+function holds(booking, at = Date.now()) {
+  if (booking.status === "cancelled") return false;
+  if (booking.status === "awaiting_payment") return at - Date.parse(booking.createdAt) < HOLD_MINUTES * 60000;
+  return true;
+}
+
+const lineIsLive = (booking, serviceId) => {
+  const status = booking.vendors?.find((v) => v.serviceId === serviceId)?.status;
+  return !["Declined", "Cancelled", "Replaced", "Refunded"].includes(status);
+};
 
 /**
  * The ids, from `serviceIds`, that are not free on `date`.
  * `busy` maps a service id to the dates its vendor has blocked: { "buffet": ["2026-12-12"] }.
+ * `except` is a booking id to leave out (a booking does not clash with itself).
  */
-export function unavailable(serviceIds, date, bookings = [], busy = {}) {
+export function unavailable(serviceIds, date, bookings = [], busy = {}, except = null) {
   const taken = new Set(
     bookings
-      .filter((booking) => booking.event.date === date)
-      .flatMap((booking) =>
-        booking.quote.lines
-          .filter((line) => booking.vendors?.find((v) => v.serviceId === line.id)?.status !== "Declined")
-          .map((line) => line.id)
-      )
+      .filter((booking) => booking.event.date === date && booking.id !== except && holds(booking))
+      .flatMap((booking) => booking.quote.lines.filter((line) => lineIsLive(booking, line.id)).map((line) => line.id))
   );
   return serviceIds.filter((id) => taken.has(id) || busy[id]?.includes(date));
 }

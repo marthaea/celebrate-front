@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { api, useLoad } from "../../../src/api.js";
 import { formatDate, money } from "../../../src/format.js";
 import { session, SignedOut, staff } from "../staff.js";
-import { ErrorNote, Loading, StaffSignIn } from "../components.jsx";
+import { AreaSelect, ErrorNote, Loading, PrivateFile, StaffSignIn } from "../components.jsx";
 
-const TABS = ["Overview", "Vendors", "Customers", "Payments", "Appointments", "Reviews"];
+const TABS = ["Overview", "Applications", "Cases", "Vendors", "Customers", "Payments", "Appointments", "Reviews"];
 const stateClass = (status) => (["approved", "Confirmed"].includes(status) ? "confirmed" : ["pending", "Waiting", "Requested"].includes(status) ? "waiting" : "off");
 
 function AddVendor({ meta, onAdd }) {
@@ -21,9 +21,7 @@ function AddVendor({ meta, onAdd }) {
         <label className="field"><span className="caps">What they do</span>
           <select value={form.category} onChange={set("category")}>{(meta?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
         </label>
-        <label className="field"><span className="caps">District</span>
-          <select value={form.district} onChange={set("district")}>{(meta?.districts ?? []).map((d) => <option key={d}>{d}</option>)}</select>
-        </label>
+        <AreaSelect value={form.district} districts={meta?.districts ?? []} onChange={(district) => setForm((f) => ({ ...f, district }))} />
         <label className="field"><span className="caps">Starting password</span><input type="password" value={form.password} onChange={set("password")} minLength={8} autoComplete="new-password" required /></label>
       </div>
       <button className="button fit">Add business</button>
@@ -31,14 +29,10 @@ function AddVendor({ meta, onAdd }) {
   );
 }
 
-/** Customer accounts: who has signed up, what they have booked and paid, and suspending or resetting them. */
+/** Host accounts: who has signed up, what they have booked and paid, and suspending them. Hosts sign in by SMS code, so there are no passwords to reset. */
 function Customers({ call, act, version }) {
   const { data, error, loading } = useLoad(() => call("/admin/customers"), [version]);
   const [search, setSearch] = useState("");
-  const setPassword = (customer) => {
-    const password = window.prompt(`New password for ${customer.name} (at least 8 characters). Check it is really them first, then tell them yourself.`);
-    if (password) act(`/admin/customers/${customer.id}`, { action: "password", password });
-  };
   if (loading && !data) return <Loading />;
   if (!data) return <ErrorNote>{error}</ErrorNote>;
   const words = search.trim().toLowerCase().replace(/\s+/g, "");
@@ -73,7 +67,6 @@ function Customers({ call, act, version }) {
                     {c.status === "active"
                       ? <button className="link-quiet" onClick={() => window.confirm(`Suspend ${c.name}? They will be signed out and cannot sign in.`) && act(`/admin/customers/${c.id}`, { action: "suspend" })}>Suspend</button>
                       : <button className="link-quiet" onClick={() => act(`/admin/customers/${c.id}`, { action: "restore" })}>Restore</button>}
-                    <button className="link-quiet" onClick={() => setPassword(c)}>Reset password</button>
                   </td>
                 </tr>
               ))}
@@ -83,6 +76,130 @@ function Customers({ call, act, version }) {
       )}
       <p className="quiet">Phone numbers are for Celebrate only: never pass them to vendors.</p>
     </section>
+  );
+}
+
+const when = (iso) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/** B5: checking applications, with the documents, photos, services and agreement; approve, or reject with a reason. */
+function Applications({ call, act, version, token, titleOf }) {
+  const { data, error, loading } = useLoad(() => call("/admin/applications"), [version]);
+  const [rejecting, setRejecting] = useState("");
+  const [reason, setReason] = useState("");
+  if (loading && !data) return <Loading />;
+  if (!data) return <ErrorNote>{error}</ErrorNote>;
+  const pending = data.filter((v) => v.status === "pending");
+  const others = data.filter((v) => v.status !== "pending");
+
+  const card = (v) => (
+    <article key={v.id} className="desk-card">
+      <div className="desk-card-head">
+        <div>
+          <h2>{v.name}</h2>
+          <p>{titleOf(v.category)} · {v.district} · owner: {v.owner}</p>
+          <p className="quiet">Phone {v.contacts?.phone || "–"}{v.contacts?.email ? ` · ${v.contacts.email}` : ""} · started {formatDate(v.createdAt.slice(0, 10))}{v.submittedAt ? ` · submitted ${formatDate(v.submittedAt.slice(0, 10))}` : ""}</p>
+          {v.about && <p>“{v.about}”</p>}
+        </div>
+        <span className={`state ${v.status === "pending" ? "waiting" : "off"}`}>{v.status === "draft" ? "Not submitted" : v.status}</span>
+      </div>
+      {v.review?.reason && <p className="line-state">Last rejected: “{v.review.reason}”</p>}
+      <div className="files">
+        {v.proofs.certificate && <span><small className="caps">Certificate</small><br /><PrivateFile file={v.proofs.certificate} token={token} /></span>}
+        {v.proofs.nationalId && <span><small className="caps">National ID</small><br /><PrivateFile file={v.proofs.nationalId} token={token} /></span>}
+        {!v.proofs.certificate && !v.proofs.nationalId && <span className="quiet">No proof uploaded.</span>}
+      </div>
+      {v.workPhotos.length > 0 && <div className="gallery">{v.workPhotos.map((p) => <img key={p.id} src={p.url} alt={`Work by ${v.name}`} />)}</div>}
+      {v.services.length > 0 && (
+        <ul className="lines">
+          {v.services.map((svc) => <li key={svc.id}><div><p>{svc.name}</p><p className="quiet">{titleOf(svc.category)} · {svc.included.join(", ")}</p></div><p className="num">{money(svc.price)} / {svc.unit}{svc.wasPrice ? ` (was ${money(svc.wasPrice)})` : ""}</p></li>)}
+        </ul>
+      )}
+      <p className="quiet">{v.agreement ? `Vendor agreement accepted by ${v.agreement.name} on ${formatDate(v.agreement.at.slice(0, 10))}.` : "Vendor agreement not accepted yet."}{v.missing.length ? ` Missing: ${v.missing.join(", ")}.` : ""}</p>
+      {v.status === "pending" && (rejecting === v.id ? (
+        <form className="thread" onSubmit={async (e) => { e.preventDefault(); if (await act(`/admin/vendors/${v.id}`, { action: "reject", reason })) { setRejecting(""); setReason(""); } }}>
+          <label className="field"><span className="caps">Why? The vendor sees this and can fix it.</span><textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder="e.g. The certificate is blurred. Upload a clear copy." /></label>
+          <div className="vendor-actions">
+            <button className="button fit" disabled={reason.trim().length < 5}>Send back with this reason</button>
+            <button type="button" className="button fit outline" onClick={() => setRejecting("")}>Back</button>
+          </div>
+        </form>
+      ) : (
+        <div className="vendor-actions">
+          <button className="chip on" onClick={() => act(`/admin/vendors/${v.id}`, { action: "approve" })}>Verify and approve</button>
+          <button className="chip" onClick={() => setRejecting(v.id)}>Reject with a reason</button>
+        </div>
+      ))}
+    </article>
+  );
+
+  return (
+    <section className="desk-list">
+      <h2 className="caps">Waiting for you ({pending.length})</h2>
+      {pending.length === 0 && <p className="quiet">No applications waiting.</p>}
+      {pending.map(card)}
+      {others.length > 0 && (
+        <details>
+          <summary className="caps">Started or sent back ({others.length})</summary>
+          <div className="desk-list">{others.map(card)}</div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** F3 and F4: a vendor who cancelled (offer a replacement or a full refund), or a host's complaint (decide within 3 working days). */
+function CaseCard({ record, call, act, token }) {
+  const [options, setOptions] = useState(null);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const late = record.status === "open" && record.dueBy < new Date().toISOString();
+  const findReplacements = async () => setOptions(await call(`/admin/cases/${record.id}/replacements`));
+  return (
+    <article className="desk-card">
+      <div className="desk-card-head">
+        <div>
+          <h2>{record.type === "complaint" ? "Complaint" : "Vendor cancelled"} · {record.vendor}</h2>
+          <p>“{record.text}”</p>
+          <p className="quiet">{record.id} · {record.bookingId} · host {record.customer || "–"} · opened {when(record.openedAt)}</p>
+        </div>
+        <span className={`state ${record.status === "open" ? "waiting" : "confirmed"}`}>{record.status === "open" ? (late ? "Overdue" : `Due ${when(record.dueBy)}`) : "Settled"}</span>
+      </div>
+      {record.evidence.length > 0 && <div className="files"><small className="caps">Host's evidence</small>{record.evidence.map((f) => <PrivateFile key={f.id} file={f} token={token} />)}</div>}
+      {record.type === "complaint" && (record.response
+        ? <><p className="line-state">Vendor's side: “{record.response.text}”</p>{record.response.evidence.length > 0 && <div className="files"><small className="caps">Vendor's evidence</small>{record.response.evidence.map((f) => <PrivateFile key={f.id} file={f} token={token} />)}</div>}</>
+        : record.status === "open" && <p className="quiet">The vendor has not given their side yet.</p>)}
+      {record.resolution && (
+        <p className="line-state">
+          {record.resolution.action === "replacement" ? `Replaced by ${record.resolution.vendor}.` : record.resolution.action === "dismiss" ? "Settled with no refund." : `Refund: ${money(record.resolution.sentBack ?? record.resolution.amount)}${record.resolution.sentBack !== undefined ? ` sent back, ${money(record.resolution.amount)} off the booking` : ""}.`}
+          {record.resolution.note ? ` “${record.resolution.note}”` : ""} {when(record.resolution.at)}
+        </p>
+      )}
+
+      {record.status === "open" && record.type === "vendor-cancel" && (
+        <div className="desk-list">
+          {!options && <button className="chip" onClick={findReplacements}>Find a replacement free that day</button>}
+          {options && options.length === 0 && <p className="quiet">No one of the same kind is free that day.</p>}
+          {options?.map((o) => (
+            <div key={o.id} className="swap-row">
+              <span><strong>{o.vendor}</strong> · {o.name} · {o.district} · {money(o.price)} / {o.unit}{o.rating ? ` · ★ ${o.rating}` : ""}</span>
+              <button className="chip on" onClick={() => act(`/admin/cases/${record.id}/resolve`, { action: "replacement", serviceId: o.id })}>Offer this replacement</button>
+            </div>
+          ))}
+          <button className="chip" onClick={() => window.confirm(`Take ${record.vendor} off the booking and refund the host ${money(record.allIn)} (or take it off their balance)?`) && act(`/admin/cases/${record.id}/resolve`, { action: "refund" })}>Full refund for this vendor ({money(record.allIn)})</button>
+        </div>
+      )}
+
+      {record.status === "open" && record.type === "complaint" && (
+        <form className="thread" onSubmit={(e) => { e.preventDefault(); act(`/admin/cases/${record.id}/resolve`, amount ? { action: "refund", amount: Number(amount), note } : { action: "dismiss", note }); }}>
+          <div className="fields">
+            <label className="field"><span className="caps">Refund to the host (UGX)</span><input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))} placeholder={`0 to ${record.allIn.toLocaleString("en-US")}`} /></label>
+            <label className="field"><span className="caps">Note to both sides</span><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={400} /></label>
+          </div>
+          <p className="quiet">A refund comes out of the vendor's payout, which is released once you decide.</p>
+          <button className="button fit">{amount ? `Refund ${money(Number(amount))} and close` : "Close with no refund"}</button>
+        </form>
+      )}
+    </article>
   );
 }
 
@@ -120,9 +237,11 @@ function Desk({ who, onSignOut }) {
 
   const { totals } = data;
   const pending = data.vendors.filter((v) => v.status === "pending");
-  const others = data.vendors.filter((v) => v.status !== "pending");
+  const others = data.vendors.filter((v) => ["approved", "suspended"].includes(v.status));
   const titleOf = (id) => meta.data?.categories.find((c) => c.id === id)?.title ?? id;
-  const counts = { Vendors: pending.length };
+  const openCases = data.cases.filter((c) => c.status === "open");
+  const overdue = data.payouts.filter((p) => p.overdue);
+  const counts = { Applications: pending.length, Cases: openCases.length };
 
   return (
     <div className="page desk">
@@ -130,7 +249,7 @@ function Desk({ who, onSignOut }) {
         <div>
           <p className="caps">Admin</p>
           <h1>Celebrate dashboard</h1>
-          <p className="quiet">Vendors, payments, appointments and reviews in one place.{data.demo ? " Demo mode: set ADMIN_PASSWORD on the host before real use." : ""}</p>
+          <p className="quiet">Applications, cases, vendors, hosts and money in one place.{data.demo ? " Demo mode: set ADMIN_PASSWORD on the host before real use." : ""}</p>
         </div>
         <button className="button fit outline" onClick={onSignOut}>Sign out</button>
       </header>
@@ -146,22 +265,38 @@ function Desk({ who, onSignOut }) {
         <>
           <div className="tiles">
             <div><p className="tile-number">{totals.bookings}</p><p>bookings worth {money(totals.value)}</p></div>
-            <div><p className="tile-number">{money(totals.collected)}</p><p>collected from customers</p></div>
+            <div><p className="tile-number">{money(totals.collected)}</p><p>collected from hosts</p></div>
+            <div><p className="tile-number">{money(totals.refunded)}</p><p>refunded · {totals.cancelled} cancelled</p></div>
             <div><p className="tile-number">{money(totals.outstanding)}</p><p>balances still due</p></div>
             <div><p className="tile-number">{money(totals.fees)}</p><p>platform fees (3%)</p></div>
             <div><p className="tile-number">{money(totals.owedToVendors)}</p><p>owed to vendors</p></div>
             <div><p className="tile-number">{money(totals.paidToVendors)}</p><p>paid out to vendors</p></div>
             <div><p className="tile-number">{others.filter((v) => v.status === "approved").length}</p><p>active vendors · {pending.length} waiting for approval</p></div>
             <div><p className="tile-number">{data.visits.filter((v) => v.status === "Requested").length}</p><p>appointments vendors have not answered</p></div>
+            <div><p className="tile-number">{totals.openCases}</p><p>cases to decide</p></div>
+            <div><p className="tile-number">{totals.overdue}</p><p>bookings not answered within 24 hours</p></div>
           </div>
+          {overdue.length > 0 && (
+            <section className="desk-list">
+              <h2 className="caps">Not answered within 24 hours</h2>
+              {overdue.map((p) => (
+                <article key={p.bookingId + p.serviceId} className="desk-card">
+                  <div className="desk-card-head">
+                    <div><h2>{p.vendor}</h2><p className="quiet">{p.service} · {p.bookingId} · event {formatDate(p.eventDate)} · was due {when(p.respondBy)}</p></div>
+                    <button className="chip" onClick={() => act(`/admin/bookings/${p.bookingId}/lines/${encodeURIComponent(p.serviceId)}/no-response`, {})}>Treat as declined</button>
+                  </div>
+                </article>
+              ))}
+            </section>
+          )}
           <section className="desk-list">
             <h2 className="caps">Vendors needing attention</h2>
-            {others.filter((v) => v.waiting || v.visitsWaiting || v.declined || (v.rating && v.rating < 3)).length === 0 && <p className="quiet">Nothing to chase. Every vendor is up to date.</p>}
-            {others.filter((v) => v.waiting || v.visitsWaiting || v.declined || (v.rating && v.rating < 3)).map((v) => (
+            {others.filter((v) => v.overdue || v.visitsWaiting || v.declined || v.complaints || (v.rating && v.rating < 3)).length === 0 && <p className="quiet">Nothing to chase. Every vendor is up to date.</p>}
+            {others.filter((v) => v.overdue || v.visitsWaiting || v.declined || v.complaints || (v.rating && v.rating < 3)).map((v) => (
               <article key={v.id} className="desk-card">
                 <h2>{v.name}</h2>
                 <p className="quiet">
-                  {[v.waiting && `${v.waiting} bookings not answered`, v.visitsWaiting && `${v.visitsWaiting} appointments not answered`, v.declined && `${v.declined} bookings declined`, v.rating && v.rating < 3 && `rated ★ ${v.rating}`].filter(Boolean).join(" · ")}
+                  {[v.overdue && `${v.overdue} bookings not answered in time`, v.visitsWaiting && `${v.visitsWaiting} appointments not answered`, v.declined && `${v.declined} bookings declined or cancelled`, v.complaints && `${v.complaints} complaints`, v.rating && v.rating < 3 && `rated ★ ${v.rating}`].filter(Boolean).join(" · ")}
                 </p>
               </article>
             ))}
@@ -171,26 +306,7 @@ function Desk({ who, onSignOut }) {
 
       {tab === "Vendors" && (
         <section className="desk-list">
-          <h2 className="caps">Applications to check ({pending.length})</h2>
-          {pending.length === 0 && <p className="quiet">No applications waiting.</p>}
-          {pending.map((v) => (
-            <article key={v.id} className="desk-card">
-              <div className="desk-card-head">
-                <div>
-                  <h2>{v.name}</h2>
-                  <p>{titleOf(v.category)} · {v.district} · owner: {v.owner}</p>
-                  {v.about && <p className="quiet">“{v.about}”</p>}
-                  <p className="quiet">Applied {formatDate(v.createdAt.slice(0, 10))}. Check the business is real before approving.</p>
-                </div>
-                <span className="state waiting">Pending</span>
-              </div>
-              <div className="vendor-actions">
-                <button className="chip on" onClick={() => act(`/admin/vendors/${v.id}`, { action: "approve" })}>Verify and approve</button>
-                <button className="chip" onClick={() => act(`/admin/vendors/${v.id}`, { action: "reject" })}>Reject</button>
-              </div>
-            </article>
-          ))}
-
+          {pending.length > 0 && <p className="aside-note">{pending.length} {pending.length === 1 ? "application is" : "applications are"} waiting in Applications.</p>}
           <h2 className="caps">All vendors ({others.length})</h2>
           <div className="table-scroll">
             <table className="desk-table">
@@ -206,7 +322,7 @@ function Desk({ who, onSignOut }) {
                     <td>{v.rating ? `★ ${v.rating} (${v.reviews})` : "–"}</td>
                     <td className="row-actions">
                       {v.status === "approved" && <button className="link-quiet" onClick={() => act(`/admin/vendors/${v.id}`, { action: "suspend" })}>Suspend</button>}
-                      {v.status !== "approved" && <button className="link-quiet" onClick={() => act(`/admin/vendors/${v.id}`, { action: "restore" })}>{v.status === "rejected" ? "Approve" : "Restore"}</button>}
+                      {v.status === "suspended" && <button className="link-quiet" onClick={() => act(`/admin/vendors/${v.id}`, { action: "restore" })}>Restore</button>}
                       <button className="link-quiet" onClick={() => act(`/admin/vendors/${v.id}`, { action: v.verified ? "unverify" : "verify" })}>{v.verified ? "Remove badge" : "Verify"}</button>
                       <button className="link-quiet" onClick={() => setPassword(v)}>Set password</button>
                     </td>
@@ -220,6 +336,22 @@ function Desk({ who, onSignOut }) {
         </section>
       )}
 
+      {tab === "Applications" && <Applications call={call} act={act} version={version} token={who.token} titleOf={titleOf} />}
+
+      {tab === "Cases" && (
+        <section className="desk-list">
+          <p className="quiet">Vendor cancellations need a replacement or a refund for the host. Complaints are decided within 3 working days, after hearing both sides; the vendor's payout waits until then.</p>
+          {data.cases.length === 0 && <p className="quiet">No cases yet.</p>}
+          {[...openCases].sort((a, b) => a.dueBy.localeCompare(b.dueBy)).map((record) => <CaseCard key={record.id} record={record} call={call} act={act} token={who.token} />)}
+          {data.cases.some((c) => c.status !== "open") && (
+            <details>
+              <summary className="caps">Settled ({data.cases.filter((c) => c.status !== "open").length})</summary>
+              <div className="desk-list">{data.cases.filter((c) => c.status !== "open").reverse().map((record) => <CaseCard key={record.id} record={record} call={call} act={act} token={who.token} />)}</div>
+            </details>
+          )}
+        </section>
+      )}
+
       {tab === "Customers" && <Customers call={call} act={act} version={version} />}
 
       {tab === "Payments" && (
@@ -229,7 +361,7 @@ function Desk({ who, onSignOut }) {
           {data.bookings.length > 0 && (
             <div className="table-scroll">
               <table className="desk-table">
-                <thead><tr><th>Booking</th><th>Event</th><th>Total</th><th>Paid</th><th>Balance</th><th>Fee</th><th>Paid by</th></tr></thead>
+                <thead><tr><th>Booking</th><th>Event</th><th>Total</th><th>Paid</th><th>Balance</th><th>Refunded</th><th>Fee</th><th>Payments</th></tr></thead>
                 <tbody>
                   {data.bookings.map((b) => (
                     <tr key={b.id}>
@@ -237,9 +369,10 @@ function Desk({ who, onSignOut }) {
                       <td>{b.event.type}<small>{formatDate(b.event.date)}</small></td>
                       <td>{money(b.total)}</td>
                       <td>{money(b.paid)}</td>
-                      <td>{b.balance ? <span className="state waiting">{money(b.balance)}</span> : <span className="state confirmed">Paid in full</span>}</td>
+                      <td>{b.status === "cancelled" ? <span className="state off">Cancelled</span> : b.balance ? <span className="state waiting">{money(b.balance)}</span> : <span className="state confirmed">Paid in full</span>}</td>
+                      <td>{b.refunded ? money(b.refunded) : "–"}</td>
                       <td>{money(b.fee)}</td>
-                      <td>{b.method}{b.balanceMethod && b.balanceMethod !== b.method ? `, ${b.balanceMethod}` : ""}</td>
+                      <td>{b.payments.map((p) => <small key={p.id}>{p.kind} · {money(p.amount)} · {p.methodName} · {p.status}</small>)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -251,26 +384,24 @@ function Desk({ who, onSignOut }) {
           {data.payouts.length > 0 && (
             <div className="table-scroll">
               <table className="desk-table">
-                <thead><tr><th>Vendor</th><th>Booking</th><th>Event date</th><th>Vendor's answer</th><th>Due</th><th>Payout</th></tr></thead>
+                <thead><tr><th>Vendor</th><th>Booking</th><th>Event date</th><th>Vendor's answer</th><th>Delivery</th><th>Due</th><th>Payout</th></tr></thead>
                 <tbody>
                   {data.payouts.map((p) => (
-                    <tr key={p.bookingId + p.serviceId} className={p.status === "Declined" ? "dim" : ""}>
+                    <tr key={p.bookingId + p.serviceId} className={["Declined", "Cancelled", "Replaced", "Refunded"].includes(p.status) ? "dim" : ""}>
                       <th scope="row">{p.vendor}<small>{p.service}</small></th>
                       <td>{p.bookingId}</td>
                       <td>{formatDate(p.eventDate)}</td>
                       <td><span className={`state ${stateClass(p.status)}`}>{p.status}</span></td>
-                      <td>{p.status === "Declined" ? "–" : money(p.due)}</td>
-                      <td>
-                        {p.status === "Declined" ? "Nothing due"
-                          : <button className={`chip ${p.paidOut ? "on" : ""}`} onClick={() => act("/admin/payouts", { bookingId: p.bookingId, serviceId: p.serviceId, paid: !p.paidOut })}>{p.paidOut ? "Paid out · undo" : "Mark paid out"}</button>}
-                      </td>
+                      <td>{p.confirmedAt ? (p.autoConfirmed ? "Confirmed automatically" : "Confirmed by host") : p.deliveredAt ? "Delivered, awaiting host" : "–"}</td>
+                      <td>{p.due ? money(p.due) : "–"}</td>
+                      <td>{p.payout.status === "paid" ? <span className="state confirmed">Paid {money(p.payout.amount)}</span> : p.hold ? <span className="state waiting">Held: {p.hold}</span> : p.due ? "After delivery is confirmed" : "Nothing due"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <p className="quiet">Payments are simulated for now: these figures record what customers have agreed to pay and what you have marked as passed on. No money moves until a payment provider is connected.</p>
+          <p className="quiet">Payments, refunds and payouts are simulated for now: they are recorded as if a payment provider had made them. A vendor is paid automatically once the host confirms delivery, or 48 hours after it is marked delivered, unless a complaint holds it.</p>
         </section>
       )}
 

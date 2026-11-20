@@ -8,14 +8,12 @@ import "@fontsource/bricolage-grotesque/latin-700.css";
 import "./styles.css";
 import App from "./App.jsx";
 import { PlanProvider } from "../../src/plan.jsx";
-import { LangProvider } from "./i18n.jsx";
 import { CompareProvider } from "./compare.jsx";
 import { AccountProvider } from "./account.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
-      <LangProvider>
         <AccountProvider>
           <PlanProvider>
             <CompareProvider>
@@ -23,7 +21,6 @@ createRoot(document.getElementById("root")).render(
             </CompareProvider>
           </PlanProvider>
         </AccountProvider>
-      </LangProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

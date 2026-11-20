@@ -12,6 +12,19 @@
   to = "/.netlify/functions/api/:splat"
   status = 200
 
+# Search engines: the sitemap lists every live service, so it is made by the API.
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/api/sitemap.xml"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/robots.txt"
+  to = "/.netlify/functions/api/robots.txt"
+  status = 200
+  force = true
+
 # Every other address is a page inside the React app.
 [[redirects]]
   from = "/*"
