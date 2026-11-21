@@ -11,9 +11,9 @@ const soon = (number) => `/team/member-${number}.svg`;
 
 export const TEAM = [
   { name: "Ogwal Steve", role: "CEO", photo: soon(1) },
-  { name: "Martha Praise Katusiime", role: "Software Engineer (Front End)", photo: soon(2) },
+  { name: "Martha Praise Katusiime", role: "Software Engineer (Front End)", photo: "/team/martha-praise-katusiime.jpg" },
   { name: "Mukasa Matthew", role: "Software Engineer (Back End)", photo: "/team/mukasa-matthew.jpg" },
-  { name: "Shalom Lilly Sirabo", role: "UI/UX Designer", photo: soon(4) },
+  { name: "Shalom Lilly Sirabo", role: "UI/UX Designer", photo: "/team/shalom-lilly-sirabo.jpg" },
   { name: "Mwiza Dorothy", role: "Governance and Data Privacy Reporting", photo: "/team/mwiza-dorothy.jpg" },
   { name: "Mugabi Marion", role: "Governance, Policy Rules and Report Making", photo: "/team/mugabi-marion.jpg" },
   { name: "Ochen Deo Lino", role: "Customer Journey and Business Analysis", photo: "/team/ochen-deo-lino.jpg" },
