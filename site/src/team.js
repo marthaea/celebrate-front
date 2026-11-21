@@ -9,7 +9,7 @@
 const soon = (number) => `/team/member-${number}.svg`;
 
 export const TEAM = [
-  { name: "Ogwal Steve", role: "CEO", photo: soon(1) },
+  { name: "Ogwal Steve", role: "CEO", photo: "/team/ogwal-steve.jpg" },
   { name: "Martha Praise Katusiime", role: "Software Engineer (Front End)", photo: "/team/martha-praise-katusiime.jpg" },
   { name: "Mukasa Matthew", role: "Software Engineer (Back End)", photo: "/team/mukasa-matthew.jpg" },
   { name: "Shalom Lilly Sirabo", role: "UI/UX Designer", photo: "/team/shalom-lilly-sirabo.jpg" },
