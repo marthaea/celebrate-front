@@ -50,6 +50,9 @@ async function request(path, data, token) {
 export const staff = {
   login: (data) => request("/staff/login", data),
   apply: (data) => request("/vendors/apply", data),
+  /** Forgotten vendor password: a code by SMS, then a new password (which also signs in). */
+  resetCode: (data) => request("/vendors/password/code", data),
+  resetPassword: (data) => request("/vendors/password/reset", data),
   /** Calls made as whoever is signed in: staffCall(session)("/vendor/overview"). */
   as: (who) => (path, data) => request(path, data, who.token),
 };

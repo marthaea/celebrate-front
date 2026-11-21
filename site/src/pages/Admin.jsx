@@ -518,6 +518,7 @@ export default function Admin() {
   return (
     <StaffSignIn
       eyebrow="Admin" title="Admin sign in" turnstile={meta.data?.turnstile}
+      forgot={<details><summary className="link-quiet">Forgot your password?</summary><p className="quiet">The admin password is set on the server that runs the backend (ADMIN_PASSWORD). Ask whoever runs it to set a new one.</p></details>}
       intro="For the Celebrate team: approve vendors, track payments and keep the marketplace honest."
       demoHint={meta.data?.demo && `The admin password is ${meta.data.demo.admin}. Set ADMIN_PASSWORD on the host to replace it.`}
       onSubmit={async ({ password, token }) => {

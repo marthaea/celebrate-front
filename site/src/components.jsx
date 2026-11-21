@@ -449,7 +449,7 @@ export function HumanCheck({ siteKey, onToken, onProblem, resetKey = 0 }) {
 }
 
 /** The sign-in form shared by the vendor and admin interfaces. */
-export function StaffSignIn({ title, eyebrow, intro, askName, demoHint, turnstile, onSubmit, children }) {
+export function StaffSignIn({ title, eyebrow, intro, askName, demoHint, turnstile, forgot, onSubmit, children }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [token, setToken] = useState("");
@@ -486,6 +486,7 @@ export function StaffSignIn({ title, eyebrow, intro, askName, demoHint, turnstil
           <span className="caps">Password</span>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </label>
+        {forgot && <div className="forgot">{forgot}</div>}
         <div className="field">
           <span className="caps">Security check</span>
           <HumanCheck siteKey={turnstile?.siteKey} onToken={setToken} onProblem={setError} resetKey={tries} />

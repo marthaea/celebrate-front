@@ -357,3 +357,42 @@ test("Live-backend routes: health, a host's data download and account deletion, 
   assert.ok(audit.body.some((e) => e.actor === "admin" && e.action === "admin/customers/nobody"));
   assert.equal((await call("/admin/audit")).status, 401, "only the admin sees the log");
 });
+
+test("B: a vendor who forgot their password gets a code by SMS and chooses a new one", async () => {
+  const applied = await call("/vendors/apply", { business: "Lira Reset Caterers", owner: "Ogwang Paul", category: "catering", district: "Lira", phone: "0772 555 666", email: "", password: "the old one", token: "good-token" });
+  assert.equal(applied.status, 201);
+  assert.equal((await call("/meta")).body.features.vendorPasswordReset, true);
+
+  // Step 1 needs the security check, and says the same for a business that does not exist.
+  assert.equal((await call("/vendors/password/code", { name: "Lira Reset Caterers", token: "bad" })).status, 403);
+  const nobody = await call("/vendors/password/code", { name: "No Such Business", token: "good-token" });
+  assert.equal(nobody.status, 200);
+  assert.equal(nobody.body.sent, true);
+  assert.equal(nobody.body.demoCode, undefined);
+  assert.equal((await call("/vendors/password/reset", { name: "No Such Business", code: "123456", password: "whatever123" })).status, 410);
+
+  const sent = await call("/vendors/password/code", { name: "Lira Reset Caterers", token: "good-token" });
+  assert.equal(sent.status, 200);
+  assert.match(sent.body.demoCode, /^\d{6}$/);
+  const wrong = sent.body.demoCode === "000000" ? "111111" : "000000";
+  assert.equal((await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: sent.body.demoCode, password: "short" })).status, 400);
+  assert.equal((await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: wrong, password: "a new password" })).body.triesLeft, 2);
+
+  const reset = await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: sent.body.demoCode, password: "a new password" });
+  assert.equal(reset.status, 200);
+  assert.ok(reset.body.token);
+  assert.equal(reset.body.vendor.id, applied.body.vendor.id);
+  assert.equal(reset.body.vendor.passHash, undefined);
+  // The code works once; the old password stops working and the new one signs in.
+  assert.equal((await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: sent.body.demoCode, password: "another one" })).status, 410);
+  assert.equal((await call("/staff/login", { role: "vendor", name: "Lira Reset Caterers", password: "the old one", token: "good-token" })).status, 401);
+  assert.equal((await call("/staff/login", { role: "vendor", name: "Lira Reset Caterers", password: "a new password", token: "good-token" })).status, 200);
+
+  // Three wrong codes end it.
+  const again = await call("/vendors/password/code", { name: "Lira Reset Caterers", token: "good-token" });
+  const other = again.body.demoCode === "000000" ? "111111" : "000000";
+  await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: other, password: "a third one" });
+  await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: other, password: "a third one" });
+  assert.equal((await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: other, password: "a third one" })).status, 429);
+  assert.equal((await call("/vendors/password/reset", { name: "Lira Reset Caterers", code: again.body.demoCode, password: "a third one" })).status, 410);
+});

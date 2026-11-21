@@ -115,7 +115,7 @@ Contacts and proofs are never shown to hosts.
 
 | Route | Body or query | Returns |
 | --- | --- | --- |
-| `GET /api/meta` | | event types and `eventNotes`, districts, categories (with `visit`), payment methods, `depositRate`, `feeRate`, `options`, `rules` (`respondHours`, `confirmHours`, `caseWorkingDays`, `refunds`), `versions`, `turnstile`, `simulated`, `demo` |
+| `GET /api/meta` | | event types and `eventNotes`, districts, categories (with `visit`), payment methods, `depositRate`, `feeRate`, `options`, `rules` (`respondHours`, `confirmHours`, `caseWorkingDays`, `refunds`), `versions`, `turnstile`, `simulated`, `demo`, `features` (`vendorPasswordReset`: the site offers the SMS password reset only when this is `true`) |
 | `GET /api/services` | `category`, `q`, `district` (a district, or `other` for places outside the list), `minPrice`, `maxPrice`, `minRating`, `filter` (`under500k`, `top`, `offers`), `sort` (`price`, `-price`, `rating`) | `[Service]` |
 | `GET /api/services/:id` | | `Service` with `options` |
 | `GET /api/offers` | | `[Service]` |
@@ -170,6 +170,8 @@ All need the host's token unless the booking has no owner (made by the earlier p
 | --- | --- | --- |
 | `POST /api/vendors/apply` **(Turnstile)** | `{ business, owner, category, district, phone, email, about, password, token }` | `201 { token, role, vendor }` with `status: "draft"` |
 | `POST /api/staff/login` **(Turnstile)** | `{ role: "vendor", name, password, token }` | `{ token, role, vendor }`. Draft, pending and rejected vendors can sign in to their application |
+| `POST /api/vendors/password/code` **(Turnstile)** | `{ name, token }` | `{ sent: true, expiresInMinutes: 10, tries: 3, demoCode? }`. Sends a 6-digit code by SMS to the phone number on the vendor's application. Answers the same for an unknown business, one with no phone number or a suspended one (and sends nothing), so it cannot be used to find out who is registered. 429 after 10 requests per IP or 3 codes per business in 10 minutes |
+| `POST /api/vendors/password/reset` | `{ name, code, password }` | `{ token, role, vendor }`: the new password is saved and the vendor is signed in. Password under 8 characters: `400`. Wrong code: `401 { triesLeft }`; third wrong code: `429 { expired: true }`; no code or expired: `410 { expired: true }`. A code works once |
 | `GET /api/vendor/application` | | `{ vendor, proofs, workPhotos, services, busy, categories, units, qtyRules, agreementVersion, missing }` |
 | `POST /api/vendor/application` | `{ owner, about, category, district, phone, email }` | B1 details and contacts |
 | `POST /api/vendor/application/documents` | `{ certificate, nationalId, workPhotos: [uploadId] }` | B2 proof and photos |

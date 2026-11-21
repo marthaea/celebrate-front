@@ -197,6 +197,10 @@ main { min-height: 70vh; }
 .split { display: grid; grid-template-columns: 1fr minmax(340px, 460px); gap: clamp(36px, 7vw, 110px); align-items: start; }
 .form { display: flex; flex-direction: column; gap: 30px; }
 .form.narrow { width: 100%; max-width: 420px; text-align: left; }
+.forgot { margin-top: -20px; text-align: right; }
+.forgot summary { display: inline; cursor: pointer; list-style: none; }
+.forgot summary::-webkit-details-marker { display: none; }
+.forgot details p { margin-top: 8px; text-align: left; font-size: 14px; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 28px clamp(18px, 3vw, 40px); }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field .caps { color: var(--quiet); }

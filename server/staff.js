@@ -12,7 +12,7 @@
 // demo mode: the admin and the sample vendors use the published demo passwords below.
 import crypto from "node:crypto";
 import { checkPassword, claimsOf, hashPassword, makeToken, same, tooManyAttempts, verifyHuman } from "./auth.js";
-import { addCustomers, mayUse } from "./customers.js";
+import { addCustomers, mayUse, normalisePhone, SIMULATED_SMS } from "./customers.js";
 import { CATEGORIES, cleanPlace, isPlace } from "./data.js";
 import { normaliseChoices } from "./options.js";
 import { unavailable } from "./availability.js";
@@ -146,6 +146,57 @@ export function addStaff(app) {
       return res.json({ token: makeToken({ role: "vendor", vendor: vendor.id }), role: "vendor", vendor: publicVendor(vendor) });
     }
     res.status(400).json({ error: "Choose how you are signing in." });
+  }));
+
+  // ---- Forgotten vendor password: a code by SMS to the phone number on the application, then a new password.
+  // The answer to step 1 is the same whether or not the business exists or has a phone number, so
+  // nobody can use it to find out which businesses are registered.
+  const RESET_MINUTES = 10;
+  const RESET_TRIES = 3;
+  const resetHash = (id, code) => crypto.createHash("sha256").update(`reset:${id}:${code}`).digest("hex");
+
+  app.post("/api/vendors/password/code", safe(async (req, res) => {
+    const id = slug(String(req.body?.name ?? ""));
+    if (!id) return res.status(400).json({ error: "Enter your business name." });
+    if (tooManyAttempts(`reset-ip:${req.ip}`, 10)) return res.status(429).json({ error: "Too many codes asked for. Wait ten minutes and try again." });
+    const human = await verifyHuman(req.body?.token);
+    if (human.error) return res.status(human.status).json({ error: human.error });
+    const answer = { sent: true, expiresInMinutes: RESET_MINUTES, tries: RESET_TRIES };
+    const vendor = (await loadVendors()).find((v) => v.id === id);
+    const phone = normalisePhone(vendor?.contacts?.phone);
+    if (!vendor || !phone || vendor.status === "suspended") return res.json(answer);
+    // At most three codes per business in ten minutes, so nobody can flood the owner's phone.
+    if (tooManyAttempts(`reset:${id}`, 3)) return res.status(429).json({ error: "Too many codes sent for this business. Wait ten minutes and try again." });
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+    await write(`reset:${id}`, { hash: resetHash(id, code), tries: 0, expires: Date.now() + RESET_MINUTES * 60000 });
+    // A real backend sends the SMS here: "Your Celebrate password reset code is 123456. It expires in 10 minutes."
+    res.json({ ...answer, ...(SIMULATED_SMS && { demoCode: code }) });
+  }));
+
+  app.post("/api/vendors/password/reset", safe(async (req, res) => {
+    const id = slug(String(req.body?.name ?? ""));
+    const password = String(req.body?.password ?? "");
+    if (password.length < 8) return res.status(400).json({ error: "Choose a password of at least 8 characters." });
+    const pending = id ? await read(`reset:${id}`, null) : null;
+    if (!pending || pending.expires < Date.now()) {
+      if (pending) await write(`reset:${id}`, null);
+      return res.status(410).json({ error: "That code has run out or was never sent. Ask for a new one.", expired: true });
+    }
+    const code = String(req.body?.code ?? "").replace(/\s/g, "");
+    if (!same(resetHash(id, code), pending.hash)) {
+      const left = RESET_TRIES - (pending.tries + 1);
+      if (left <= 0) {
+        await write(`reset:${id}`, null);
+        return res.status(429).json({ error: "That code is wrong three times. Ask for a new code.", expired: true, triesLeft: 0 });
+      }
+      await write(`reset:${id}`, { ...pending, tries: pending.tries + 1 });
+      return res.status(401).json({ error: `That code is not right. You have ${left} ${left === 1 ? "try" : "tries"} left.`, triesLeft: left });
+    }
+    await write(`reset:${id}`, null);
+    const vendor = (await loadVendors()).find((v) => v.id === id);
+    if (!vendor || vendor.status === "suspended") return res.status(403).json({ error: "This vendor account is not active. Contact Celebrate." });
+    const saved = await saveVendor({ ...vendor, passHash: hashPassword(password) });
+    res.json({ token: makeToken({ role: "vendor", vendor: saved.id }), role: "vendor", vendor: publicVendor(saved) });
   }));
 
   // ---- B1 to B5: the application

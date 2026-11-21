@@ -70,6 +70,8 @@ app.get("/api/meta", (_req, res) => {
     turnstile: { siteKey: TURNSTILE.siteKey, test: TURNSTILE.test },
     // What is simulated until the real services are connected. The site says so where it matters.
     simulated: { payments: SIMULATED_PAYMENTS, sms: SIMULATED_SMS },
+    // Optional features the site switches on only when the backend has them.
+    features: { vendorPasswordReset: true },
     // In demo mode (no ADMIN_PASSWORD set) the sign-in pages show these so the interfaces can be tried.
     demo: DEMO ? { admin: DEMO_ADMIN_PASSWORD, vendor: DEMO_VENDOR_PASSWORD } : null,
   });

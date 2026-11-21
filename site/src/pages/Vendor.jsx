@@ -475,6 +475,7 @@ export default function Vendor() {
   return (
     <StaffSignIn
       eyebrow="For vendors" title="Vendor sign in" askName turnstile={meta.data?.turnstile}
+      forgot={<Link to="/vendor/reset" className="link-quiet">Forgot your password?</Link>}
       intro="Answer bookings and appointments, keep your calendar, and talk to your hosts. Still applying? Sign in to carry on with your application."
       demoHint={meta.data?.demo && `Sign in as any listed business, for example “Mama's Kitchen”, with the password ${meta.data.demo.vendor}`}
       onSubmit={async ({ name, password, token }) => {

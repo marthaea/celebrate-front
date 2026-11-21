@@ -17,6 +17,7 @@ import Verify from "./pages/Verify.jsx";
 import Privacy from "./pages/Privacy.jsx";
 import { Terms, VendorAgreement } from "./pages/Legal.jsx";
 import Vendor from "./pages/Vendor.jsx";
+import VendorReset from "./pages/VendorReset.jsx";
 import Admin from "./pages/Admin.jsx";
 import Team from "./pages/Team.jsx";
 import About from "./pages/About.jsx";
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/vendor" element={<Vendor />} />
+          <Route path="/vendor/reset" element={<VendorReset />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
