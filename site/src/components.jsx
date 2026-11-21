@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronLeft, ChevronRight, Scale } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, Scale, UserRound } from "lucide-react";
 import { toISODate } from "../../src/format.js";
 import { useLoad } from "../../src/api.js";
 import { more } from "./extra.js";
@@ -147,7 +147,10 @@ export function Header({ overHero }) {
           {searching ? <X size={16} strokeWidth={1.4} /> : <Search size={16} strokeWidth={1.4} />}
         </button>
         {customer && <Notifications />}
-        <NavLink to="/account" className={customer ? "hide-small" : ""}>{customer ? customer.name.split(" ")[0] : "Log in"}</NavLink>
+        <NavLink to="/account" className="login-pill" aria-label={customer ? `Your account, ${customer.name}` : "Log in or sign up"}>
+          <UserRound size={16} strokeWidth={1.8} aria-hidden="true" />
+          <span className={customer ? "hide-tiny" : ""}>{customer ? customer.name.split(" ")[0] : "Log in"}</span>
+        </NavLink>
         <NavLink to="/bookings" className="hide-small">Bookings</NavLink>
         <NavLink to="/plan" className="plan-pill"><span className="hide-tiny">My plan</span> <span className="count">{items.length}</span></NavLink>
       </nav>
