@@ -5,7 +5,6 @@
  * and set `photo` to its path. Until then `photo` is that card's "Photo coming soon" picture,
  * /team/member-<number>.svg, each tinted to match its card.
  * `bio` is optional: one or two short sentences shown on /team.
- * A line still reading "Team member name" is a placeholder for someone whose details we do not have yet.
  */
 const soon = (number) => `/team/member-${number}.svg`;
 
@@ -19,7 +18,7 @@ export const TEAM = [
   { name: "Ochen Deo Lino", role: "Customer Journey and Business Analysis", photo: "/team/ochen-deo-lino.jpg" },
   { name: "Tumwine Timothy", role: "Marketing Lead", photo: "/team/tumwine-timothy.jpg" },
   { name: "Mutoni Denise", role: "Marketing Communications Designer", photo: soon(9) },
-  { name: "Team member name", role: "Role to be announced", photo: soon(10) },
+  { name: "Asia Marvin", role: "Brand Strategist", photo: "/team/asia-marvin.jpg" },
 ];
 
 /** True while a card still shows a "Photo coming soon" picture. */
