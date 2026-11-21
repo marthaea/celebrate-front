@@ -17,7 +17,7 @@ export const TEAM = [
   { name: "Mugabi Marion", role: "Governance, Policy Rules and Report Making", photo: "/team/mugabi-marion.jpg" },
   { name: "Ochen Deo Lino", role: "Customer Journey and Business Analysis", photo: "/team/ochen-deo-lino.jpg" },
   { name: "Tumwine Timothy", role: "Marketing Lead", photo: "/team/tumwine-timothy.jpg" },
-  { name: "Mutoni Denise", role: "Marketing Communications Designer", photo: soon(9) },
+  { name: "Mutoni Denise", role: "Marketing Communications Designer", photo: "/team/mutoni-denise.jpg" },
   { name: "Asia Marvin", role: "Brand Strategist", photo: "/team/asia-marvin.jpg" },
 ];
 

@@ -391,6 +391,9 @@ main { min-height: 70vh; }
 .footer nav a { border-bottom: 2px solid transparent; }
 .footer nav a:hover { border-bottom-color: var(--cream); }
 .footer :focus-visible { outline-color: var(--cream); }
+.footer-social { display: flex; gap: 10px; margin-top: 22px; list-style: none; padding: 0; }
+.footer-social a { display: grid; place-items: center; width: 44px; height: 44px; border: 1.5px solid var(--cream); border-radius: 50%; color: var(--cream); transition: background-color 0.2s, color 0.2s; }
+.footer-social a:hover { background: var(--cream); color: var(--red); }
 .footer-small { padding: clamp(36px, 5vw, 64px) var(--gutter) 0; font-size: 13px; }
 /* The name, huge and cut off halfway by the bottom of the page. */
 .footer-word { margin: clamp(20px, 3vw, 40px) 0 -0.47em; font-family: var(--display); font-weight: 700; font-size: 17.4vw; line-height: 0.8; letter-spacing: -0.02em; text-align: center; white-space: nowrap; color: var(--ink); user-select: none; }
