@@ -181,6 +181,9 @@ main { min-height: 70vh; }
 .button.ghost:hover:not(:disabled) { background: var(--white); border-color: var(--white); color: var(--ink); }
 .hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 .hero-actions .button { width: auto; }
+.hero-login { font-size: 14px; font-weight: 500; }
+.hero-login a { text-decoration: underline; text-underline-offset: 3px; }
+.hero-login a:hover { text-decoration-thickness: 2px; }
 .intro .hero-actions { gap: 12px 32px; }
 .offline { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 10px var(--gutter); background: var(--ink); color: var(--cream); font-size: 14px; text-align: center; }
 .button.dark { background: var(--ink); border-color: var(--ink); }

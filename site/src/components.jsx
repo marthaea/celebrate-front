@@ -147,7 +147,7 @@ export function Header({ overHero }) {
           {searching ? <X size={16} strokeWidth={1.4} /> : <Search size={16} strokeWidth={1.4} />}
         </button>
         {customer && <Notifications />}
-        <NavLink to="/account" className="hide-small">{customer ? customer.name.split(" ")[0] : "Log in"}</NavLink>
+        <NavLink to="/account" className={customer ? "hide-small" : ""}>{customer ? customer.name.split(" ")[0] : "Log in"}</NavLink>
         <NavLink to="/bookings" className="hide-small">Bookings</NavLink>
         <NavLink to="/plan" className="plan-pill"><span className="hide-tiny">My plan</span> <span className="count">{items.length}</span></NavLink>
       </nav>

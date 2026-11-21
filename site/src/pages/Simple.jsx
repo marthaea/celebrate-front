@@ -102,6 +102,7 @@ function SignInForm({ next }) {
       <div className="toolbar-row" role="group" aria-label="Sign up or sign in">
         <button type="button" className={mode === "signup" ? "active" : ""} aria-pressed={mode === "signup"} onClick={() => switchTo("signup")}>I am new here</button>
         <button type="button" className={mode === "signin" ? "active" : ""} aria-pressed={mode === "signin"} onClick={() => switchTo("signin")}>I have an account</button>
+        <Link to="/vendor">I am a vendor</Link>
       </div>
 
       {step === "number" && (

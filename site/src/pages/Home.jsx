@@ -5,12 +5,14 @@ import { usePlan } from "../../../src/plan.jsx";
 import { more } from "../extra.js";
 import { Art, Mark, ErrorNote, Loading, ServiceCard } from "../components.jsx";
 import { featuredTeam } from "../team.js";
+import { useAccount } from "../account.jsx";
 import { TeamCard } from "./Team.jsx";
 import { PostCard } from "./Blog.jsx";
 import { sortedPosts } from "../blog.js";
 
 export default function Home() {
   const plan = usePlan();
+  const { customer } = useAccount();
   const { hash } = useLocation();
   const navigate = useNavigate();
   const [filling, setFilling] = useState(false);
@@ -50,6 +52,11 @@ export default function Home() {
             <Link to="/services" className="button fit sun">Plan my event</Link>
             <Link to="/budget" className="button fit ghost">Plan by budget</Link>
           </div>
+          <p className="hero-login">
+            {customer
+              ? <>Welcome back, {customer.name.split(" ")[0]} · <Link to="/bookings">My bookings</Link></>
+              : <><Link to="/account">Log in or sign up</Link> · <Link to="/vendor">Vendor sign in</Link></>}
+          </p>
         </div>
       </section>
 
