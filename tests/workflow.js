@@ -331,3 +331,29 @@ test("Areas: a place outside the list can be typed, and browsing can filter for 
   assert.equal(applied.body.vendor.district, "Kalangala");
   assert.equal((await call("/services?district=other")).body.filter((s) => s.district === "Mukono").length, 0);
 });
+
+test("Live-backend routes: health, a host's data download and account deletion, and the admin audit log", async () => {
+  assert.equal((await call("/health")).body.ok, true);
+
+  const { customer, call: mine } = await host("Akello");
+  const data = await mine("/me/data");
+  assert.equal(data.status, 200);
+  assert.equal(data.body.account.id, customer.id);
+  assert.ok(Array.isArray(data.body.bookings));
+
+  assert.equal((await mine("/me/delete", {})).status, 400, "deleting needs confirm: true");
+  assert.equal((await mine("/me/delete", { confirm: true })).status, 200);
+  assert.equal((await mine("/me")).status, 401, "the deleted account can no longer sign in");
+
+  const wrong = await call("/staff/login", { role: "admin", password: "wrong", token: "good-token" });
+  assert.equal(wrong.status, 401);
+  await admin("/admin/customers/nobody", { action: "suspend" });
+  // Entries are written as each response finishes.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const audit = await admin("/admin/audit");
+  assert.equal(audit.status, 200);
+  assert.ok(audit.body.some((e) => e.action === "me/delete" && e.actor === `customer:${customer.id}`));
+  assert.ok(audit.body.some((e) => e.action === "staff/login" && e.outcome.startsWith("refused")));
+  assert.ok(audit.body.some((e) => e.actor === "admin" && e.action === "admin/customers/nobody"));
+  assert.equal((await call("/admin/audit")).status, 401, "only the admin sees the log");
+});

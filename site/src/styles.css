@@ -644,3 +644,12 @@ textarea:focus-visible { border-color: var(--red); box-shadow: 0 0 0 3px rgb(212
 }
 .page > .block { padding-left: 0; padding-right: 0; }
 .page > .intro.narrow { border-radius: 22px; }
+
+/* Your data (account page) */
+.your-data { margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.your-data .caps { color: var(--ink); }
+.button.danger { background: var(--danger); border-color: var(--danger); color: var(--white); }
+.button.outline.danger { background: none; color: var(--danger); border-color: var(--danger); }
+.button.danger:disabled { opacity: 0.45; }
+.delete-box { padding: 20px; border: 1.5px solid var(--danger); border-radius: 16px; background: var(--white); }
+.page > .intro.narrow { margin-top: clamp(56px, 8vw, 100px); }

@@ -1,29 +1,23 @@
-# Netlify hosts the website (site/) and runs the API as a function.
+# Netlify hosts the website (site/). The API is the team's live backend; Netlify forwards /api/* to
+# it, so the browser only ever talks to the site's own address (no CORS settings needed).
 [build]
   command = "npm run build:site"
   publish = "site/dist"
 
+# The stand-in API (server/) as a Netlify Function. Not used while /api/* points at the live
+# backend; to go back to it, change the /api/* rule's "to" to "/.netlify/functions/api/:splat".
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
-  status = 200
-
-# Search engines: the sitemap lists every live service, so it is made by the API.
-[[redirects]]
-  from = "/sitemap.xml"
-  to = "/.netlify/functions/api/sitemap.xml"
+  to = "https://celebrate-api.thewtontech.com/api/:splat"
   status = 200
   force = true
 
-[[redirects]]
-  from = "/robots.txt"
-  to = "/.netlify/functions/api/robots.txt"
-  status = 200
-  force = true
+# /sitemap.xml and /robots.txt are made by the edge function netlify/edge-functions/sitemap.js,
+# so their addresses use this site's own domain and include the blog, about and team pages.
 
 # Every other address is a page inside the React app.
 [[redirects]]

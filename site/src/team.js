@@ -1,20 +1,29 @@
 /**
- * The people behind Celebrate, shown on /team and on the home page.
+ * The people behind Celebrate, shown on /team and on the home and about pages (four of them).
  *
- * These are placeholders. To add a real person, put their photo in site/public/team/
- * (a portrait, about 800 × 1000 pixels, JPG or WebP) and change their line below:
- * `photo` is the file's path from site/public, `name` and `role` are shown under the photo,
- * and `bio` (optional) is one or two short sentences. Add or remove lines to change the team size.
+ * To add or change a photo, put a portrait in site/public/team/ (about 720 × 900 pixels, JPG)
+ * and set `photo` to its path. Until then `photo` is that card's "Photo coming soon" picture,
+ * /team/member-<number>.svg, each tinted to match its card.
+ * `bio` is optional: one or two short sentences shown on /team.
+ * A line still reading "Team member name" is a placeholder for someone whose details we do not have yet.
  */
+const soon = (number) => `/team/member-${number}.svg`;
+
 export const TEAM = [
-  { name: "Team member name", role: "Founder and lead", photo: "/team/member-1.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Product and design", photo: "/team/member-2.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Engineering", photo: "/team/member-3.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Vendor partnerships", photo: "/team/member-4.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Customer care", photo: "/team/member-5.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Marketing", photo: "/team/member-6.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Operations", photo: "/team/member-7.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Finance", photo: "/team/member-8.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Trust and safety", photo: "/team/member-9.svg", bio: "A short line about what they do at Celebrate." },
-  { name: "Team member name", role: "Community", photo: "/team/member-10.svg", bio: "A short line about what they do at Celebrate." },
+  { name: "Ogwal Steve", role: "CEO", photo: soon(1) },
+  { name: "Martha Praise Katusiime", role: "Software Engineer (Front End)", photo: soon(2) },
+  { name: "Mukasa Matthew", role: "Software Engineer (Back End)", photo: "/team/mukasa-matthew.jpg" },
+  { name: "Shalom Lilly Sirabo", role: "UI/UX Designer", photo: soon(4) },
+  { name: "Mwiza Dorothy", role: "Governance and Data Privacy Reporting", photo: "/team/mwiza-dorothy.jpg" },
+  { name: "Mugabi Marion", role: "Governance, Policy Rules and Report Making", photo: "/team/mugabi-marion.jpg" },
+  { name: "Ochen Deo Lino", role: "Customer Journey and Business Analysis", photo: "/team/ochen-deo-lino.jpg" },
+  { name: "Tumwine Timothy", role: "Marketing Lead", photo: "/team/tumwine-timothy.jpg" },
+  { name: "Mutoni Denise", role: "Marketing Communications Designer", photo: soon(9) },
+  { name: "Team member name", role: "Role to be announced", photo: soon(10) },
 ];
+
+/** True while a card still shows a "Photo coming soon" picture. */
+export const hasPhoto = (person) => !/^\/team\/member-\d+\.svg$/.test(person.photo);
+
+/** Four people for the home and about pages: those with a real photo first, in team order. */
+export const featuredTeam = () => [...TEAM.filter(hasPhoto), ...TEAM.filter((p) => !hasPhoto(p))].slice(0, 4);

@@ -4,7 +4,7 @@ import { formatDate, money } from "../../../src/format.js";
 import { session, SignedOut, staff } from "../staff.js";
 import { AreaSelect, ErrorNote, Loading, PrivateFile, StaffSignIn } from "../components.jsx";
 
-const TABS = ["Overview", "Applications", "Cases", "Vendors", "Customers", "Payments", "Appointments", "Reviews"];
+const TABS = ["Overview", "Applications", "Cases", "Vendors", "Customers", "Payments", "Appointments", "Reviews", "Audit log"];
 const stateClass = (status) => (["approved", "Confirmed"].includes(status) ? "confirmed" : ["pending", "Waiting", "Requested"].includes(status) ? "waiting" : "off");
 
 function AddVendor({ meta, onAdd }) {
@@ -26,6 +26,61 @@ function AddVendor({ meta, onAdd }) {
       </div>
       <button className="button fit">Add business</button>
     </form>
+  );
+}
+
+/**
+ * The audit log from GET /api/admin/audit. Accepts a list, or { entries | items | audit | log | rows: [] },
+ * and common field names, so it works with the stand-in and with the live backend.
+ */
+const pick = (entry, keys) => keys.map((k) => entry?.[k]).find((v) => v != null && v !== "");
+const plain = (value) => (value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value));
+
+function AuditLog({ call, version }) {
+  const { data, error, loading } = useLoad(() => call("/admin/audit"), [version]);
+  const [search, setSearch] = useState("");
+  if (loading && !data) return <Loading />;
+  if (!data) return <ErrorNote>{error}</ErrorNote>;
+  const list = Array.isArray(data) ? data : ["entries", "items", "audit", "log", "rows"].map((k) => data[k]).find(Array.isArray) ?? [];
+  const rows = list.map((e, index) => {
+    const actor = pick(e, ["actor", "actorName", "user", "who", "by"]);
+    const role = pick(e, ["actorRole", "role"]);
+    return {
+      key: pick(e, ["id"]) ?? index,
+      at: pick(e, ["at", "createdAt", "created_at", "time", "timestamp"]),
+      who: [plain(actor), role && plain(role) !== plain(actor) ? `(${plain(role)})` : ""].filter(Boolean).join(" ") || "–",
+      what: plain(pick(e, ["action", "event", "type", "route", "path"])) || "–",
+      detail: [pick(e, ["target", "targetId", "entity", "subject"]), pick(e, ["detail", "details", "meta", "outcome", "status"])].filter((v) => v != null).map(plain).join(" · "),
+    };
+  });
+  const words = search.trim().toLowerCase();
+  const shown = rows.filter((r) => !words || `${r.who} ${r.what} ${r.detail}`.toLowerCase().includes(words));
+  const when = (at) => {
+    const date = at ? new Date(at) : null;
+    return date && !Number.isNaN(date.getTime()) ? date.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : plain(at) || "–";
+  };
+
+  return (
+    <section className="desk-list">
+      <p className="quiet">Sign-ins and decisions made by staff, newest first. Entries cannot be changed or removed.</p>
+      <label className="field">
+        <span className="caps">Search the log</span>
+        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Who, or what was done" />
+      </label>
+      {shown.length === 0 && <p className="quiet">{rows.length ? "Nothing matches." : "Nothing recorded yet."}</p>}
+      {shown.length > 0 && (
+        <div className="table-scroll">
+          <table className="desk-table">
+            <thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead>
+            <tbody>
+              {shown.slice(0, 300).map((r) => (
+                <tr key={r.key}><td>{when(r.at)}</td><td>{r.who}</td><td>{r.what}</td><td>{r.detail || "–"}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -353,6 +408,7 @@ function Desk({ who, onSignOut }) {
       )}
 
       {tab === "Customers" && <Customers call={call} act={act} version={version} />}
+      {tab === "Audit log" && <AuditLog call={call} version={version} />}
 
       {tab === "Payments" && (
         <section className="desk-list">

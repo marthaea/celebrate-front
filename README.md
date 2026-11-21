@@ -226,3 +226,31 @@ Cloudflare check) is in `server/auth.js`.
 - `/blog` and `/blog/<slug>` read `site/src/blog.js`. The four posts there are samples; edit them or
   add your own (instructions at the top of the file). Each post gets its own search-engine title,
   description, article data and a sitemap entry automatically.
+
+## The live backend
+
+The team's backend (Node.js, Express, MySQL) is live at `https://celebrate-api.thewtontech.com` and
+answers every route in `docs/API.md`. The code in `server/` is now the local stand-in, kept for
+tests and for working without the internet.
+
+- **Netlify** forwards `/api/*` to the live backend (`netlify.toml`), so the browser only talks to
+  the site's own address. `/sitemap.xml` and `/robots.txt` are written by
+  `netlify/edge-functions/sitemap.js` with the site's own domain and the live list of services.
+- **On your computer:**
+  - `npm run dev:live` starts only the website (http://localhost:5175), using the live backend.
+  - `npm run dev:site` starts the website with the local stand-in API, as before.
+  - `npm run dev:web:live` is the phone app against the live backend.
+- Sign-ins made against the stand-in do not work on the live backend (its tokens are JWTs): a signed-in
+  host is signed out automatically; vendors and the admin see "Please sign in again".
+- New on the account page: **Download my data** and **Delete my account**. New in the admin
+  dashboard: **Audit log**.
+- To go back to the stand-in on Netlify, change the `/api/*` rule's `to` in `netlify.toml` to
+  `/.netlify/functions/api/:splat`.
+- **Cloudflare Pages** ignores `netlify.toml`. There, `functions/` does the same job: `functions/api/[[path]].js`
+  forwards `/api/*` to the live backend, and `functions/sitemap.xml.js` and `functions/robots.txt.js`
+  write the sitemap and crawler rules. Project settings: root directory `/` (the repository root, so
+  `functions/` is found), build command `npm run build:site`, output directory `site/dist`. Optional
+  variables: `API_URL` (a different backend) and `SITE_URL`.
+- The live backend does not accept calls from other domains (no CORS), so whichever host serves the
+  site must forward `/api/*` as above. If it does not, every page that loads data says "Celebrate
+  cannot reach its server right now" and the browser console names the address that answered wrongly.

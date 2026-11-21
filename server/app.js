@@ -5,7 +5,7 @@ import express from "express";
 import { CATEGORIES, DISTRICTS, EVENT_NOTES, EVENT_TYPES, OFFER_IDS, PAYMENT_METHODS, VISIT_TIMES } from "./data.js";
 import { OPTIONS } from "./options.js";
 import { addExtras } from "./extras.js";
-import { TURNSTILE } from "./auth.js";
+import { claimsOf, TURNSTILE } from "./auth.js";
 import { mayUse, SIMULATED_SMS, TERMS_VERSION } from "./customers.js";
 import { buildQuote, DEPOSIT_RATE, PLATFORM_FEE_RATE, validateEvent } from "./pricing.js";
 import { bookedDays, nextFreeDate, unavailable } from "./availability.js";
@@ -26,6 +26,29 @@ app.set("trust proxy", true);
 
 /** The site's public address: SITE_URL if set, otherwise the address the request came in on. */
 export const siteOrigin = (req) => (process.env.SITE_URL || `${req.protocol}://${req.get("x-forwarded-host") || req.get("host")}`).replace(/\/$/, "");
+
+app.get("/api/health", (_req, res) => res.json({ ok: true, database: "memory", time: new Date().toISOString() }));
+
+// The audit log: who did what among the actions that matter (staff sign-ins, admin decisions,
+// deleted accounts). Kept to the latest 500 entries here; the real backend keeps it in its database.
+const AUDITED = /^\/api\/(admin\/|staff\/login$|me\/delete$)/;
+app.use((req, res, next) => {
+  if (req.method !== "POST" || !AUDITED.test(req.path)) return next();
+  const claims = claimsOf(req);
+  const actor = claims?.role === "admin" ? "admin" : claims?.role === "vendor" ? `vendor:${claims.vendor}`
+    : claims?.role === "customer" ? `customer:${claims.customer}` : req.path === "/api/staff/login" ? `${req.body?.role ?? "staff"} sign-in` : "anonymous";
+  res.on("finish", async () => {
+    const entry = { at: new Date().toISOString(), actor, action: req.path.replace(/^\/api\//, ""), outcome: res.statusCode < 400 ? "ok" : `refused (${res.statusCode})` };
+    if (req.body?.action) entry.detail = String(req.body.action).slice(0, 40);
+    await write("audit", [entry, ...(await read("audit", []))].slice(0, 500));
+  });
+  next();
+});
+
+app.get("/api/admin/audit", safe(async (req, res) => {
+  if (claimsOf(req)?.role !== "admin") return res.status(401).json({ error: "Please sign in again." });
+  res.json(await read("audit", []));
+}));
 
 app.get(["/sitemap.xml", "/api/sitemap.xml"], safe(async (req, res) => {
   res.type("application/xml").send(renderSitemap(siteOrigin(req), (await loadCatalogue()).visible));

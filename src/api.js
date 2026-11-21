@@ -1,5 +1,20 @@
 import { useEffect, useState } from "react";
 
+/**
+ * The API's answer as JSON. If /api is not connected to the server where the site is hosted, the host
+ * answers with its own page (HTML, or a plain "Not found") instead; that is said plainly rather than
+ * shown as an empty page or a vague "Something went wrong".
+ */
+export async function readBody(response) {
+  const json = (response.headers.get("content-type") ?? "").includes("json");
+  const body = json ? await response.json().catch(() => null) : null;
+  if (!json && response.status !== 204) {
+    console.error(`[api] ${response.url} answered ${response.status} ${response.headers.get("content-type") ?? ""}, not JSON: /api is not reaching the server.`);
+    throw new Error("Celebrate cannot reach its server right now. Please try again in a few minutes.");
+  }
+  return body;
+}
+
 async function request(path, options) {
   let response;
   try {
@@ -7,7 +22,7 @@ async function request(path, options) {
   } catch {
     throw new Error("We could not reach the server. Check your connection and try again.");
   }
-  const body = await response.json().catch(() => null);
+  const body = await readBody(response);
   if (!response.ok) throw new Error(body?.error ?? "Something went wrong. Please try again.");
   return body;
 }

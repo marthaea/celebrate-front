@@ -9,6 +9,12 @@ export const PRIORITY = {
   Wedding: ["venues", "catering", "attire", "tents", "sound", "photos", "cakes", "drinks", "mcs", "games"],
   Graduation: ["catering", "tents", "sound", "photos", "cakes", "drinks", "mcs", "venues", "attire", "games"],
   Party: ["catering", "drinks", "sound", "cakes", "games", "tents", "photos", "mcs", "venues", "attire"],
+  "Bridal shower": ["venues", "catering", "cakes", "drinks", "photos", "sound", "attire", "mcs", "tents", "games"],
+  "Baby shower": ["venues", "catering", "cakes", "drinks", "photos", "games", "sound", "tents", "mcs", "attire"],
+  Birthday: ["catering", "cakes", "drinks", "sound", "games", "venues", "photos", "tents", "mcs", "attire"],
+  Christening: ["catering", "tents", "cakes", "drinks", "photos", "sound", "mcs", "venues", "attire", "games"],
+  Proposal: ["venues", "photos", "catering", "drinks", "sound", "cakes", "attire", "tents", "mcs", "games"],
+  "Corporate event": ["venues", "catering", "sound", "mcs", "photos", "drinks", "tents", "cakes", "games", "attire"],
 };
 
 /** Grand total for a set of chosen options: their costs plus the platform fee. */

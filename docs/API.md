@@ -125,6 +125,7 @@ Contacts and proofs are never shown to hosts.
 | `POST /api/availability` | `{ date, items }` | `{ unavailable: [id], nextFree: date, similar: { id: [Service-ish] } }` |
 | `GET /api/services/:id/slots` | `date` | `{ kind, free: ["09:00", …], atEvent }` for tastings, fittings, viewings |
 | `GET /api/services/:id/reviews` | | reviews left on the site |
+| `GET /api/health` | | `{ ok, database, time }`: is the API up? |
 | `GET /sitemap.xml`, `GET /robots.txt` | | the sitemap of public pages (home, categories, every service) and the crawler rules; also at `/api/sitemap.xml` and `/api/robots.txt` |
 | `GET /api/pledges/:key`, `POST /api/pledges/:key` | `{ name, amount, towards }` | pledges on a shared plan (promises, no money) |
 
@@ -138,6 +139,8 @@ Contacts and proofs are never shown to hosts.
 | `GET /api/me/bookings` | | the host's bookings |
 | `GET /api/me/appointments` | | the host's tastings, fittings and viewings |
 | `GET /api/me/notifications` | | `[{ id, at, text, link }]`, newest first, including reminders 7 days and 1 day before |
+| `GET /api/me/data` | | everything held about the host as one JSON object (account, bookings, appointments, notifications, reviews); the account page offers it as a download |
+| `POST /api/me/delete` | `{ confirm: true }` | deletes the account (`400` without `confirm`); the site then signs out |
 
 ### Booking, payment, delivery, cancellation (workflows D, E, F) — host
 
@@ -199,6 +202,7 @@ All need the host's token unless the booking has no owner (made by the earlier p
 | `GET /api/admin/applications` | | draft, pending and rejected vendors with contacts, proofs, photos, services, agreement and `missing` |
 | `POST /api/admin/vendors/:id` | `{ action: "approve" }`, `{ action: "reject", reason }`, `suspend`, `restore`, `verify`, `unverify`, `{ action: "password", password }` | B5 and account management |
 | `POST /api/admin/vendors` | `{ business, owner, category, district, password }` | adds an already-checked vendor, approved |
+| `GET /api/admin/audit` | | the audit log, newest first: staff sign-ins, admin decisions and deleted accounts. The dashboard's Audit log tab reads a list, or `{ entries \| items \| audit \| log \| rows }`, with fields such as `at`, `actor`, `action`, `target`, `detail` |
 | `GET /api/admin/cases/:id/replacements` | | same-category services free on the event date |
 | `POST /api/admin/cases/:id/resolve` | vendor-cancel: `{ action: "replacement", serviceId }` or `{ action: "refund" }`; complaint: `{ action: "refund", amount, note }` or `{ action: "dismiss", note }` | F3, F4 |
 | `POST /api/admin/bookings/:id/lines/:serviceId/no-response` | | treats a vendor who did not answer within 24 hours as having declined (opens a case) |

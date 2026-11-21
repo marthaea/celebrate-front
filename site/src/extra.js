@@ -1,6 +1,7 @@
 // Calls the website makes beyond the ones it shares with the phone app (src/api.js).
 // Every call carries the signed-in customer's token, when there is one.
 import { customerToken } from "./account.jsx";
+import { readBody } from "../../src/api.js";
 
 /** Thrown when the server could not be reached at all, as opposed to answering "no". */
 export class Offline extends Error {}
@@ -19,7 +20,7 @@ async function request(path, data) {
   } catch {
     throw new Offline("We could not reach the server. Check your connection and try again.");
   }
-  const body = await response.json().catch(() => null);
+  const body = await readBody(response);
   if (response.status === 401) throw new NotSignedIn(body?.error ?? "Please sign in again.");
   if (!response.ok) throw new Error(body?.error ?? "Something went wrong. Please try again.");
   return body;
@@ -50,6 +51,9 @@ export const more = {
   upload: (data) => request("/uploads", data),
   me: () => request("/me"),
   updateMe: (data) => request("/me", data),
+  // The host's own data, and closing the account (Data Protection and Privacy Act rights).
+  myData: () => request("/me/data"),
+  deleteMe: () => request("/me/delete", { confirm: true }),
   myBookings: () => request("/me/bookings"),
   myVisits: () => request("/me/appointments"),
   book: (data) => request("/bookings", data),

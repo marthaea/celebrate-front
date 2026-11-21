@@ -4,7 +4,7 @@ import { api, useLoad } from "../../../src/api.js";
 import { usePlan } from "../../../src/plan.jsx";
 import { more } from "../extra.js";
 import { Art, Mark, ErrorNote, Loading, ServiceCard } from "../components.jsx";
-import { TEAM } from "../team.js";
+import { featuredTeam } from "../team.js";
 import { TeamCard } from "./Team.jsx";
 import { PostCard } from "./Blog.jsx";
 import { sortedPosts } from "../blog.js";
@@ -134,7 +134,7 @@ export default function Home() {
           <Link to="/team" className="link-caps">Our team</Link>
         </div>
         <ul className="team-grid compact">
-          {TEAM.slice(0, 4).map((person, index) => <TeamCard key={index} person={person} index={index} short />)}
+          {featuredTeam().map((person, index) => <TeamCard key={index} person={person} index={index} short />)}
         </ul>
       </section>
 

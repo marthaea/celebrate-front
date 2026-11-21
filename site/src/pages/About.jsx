@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { BadgeCheck, MapPin, ReceiptText, Wallet } from "lucide-react";
-import { TEAM } from "../team.js";
+import { featuredTeam } from "../team.js";
 import { Art } from "../components.jsx";
 import { TeamCard } from "./Team.jsx";
 
@@ -60,7 +60,7 @@ export default function About() {
       <section className="block">
         <div className="block-head"><h2>The team</h2><Link to="/team" className="link-caps">Meet everyone</Link></div>
         <ul className="team-grid compact">
-          {TEAM.slice(0, 4).map((person, index) => <TeamCard key={index} person={person} short />)}
+          {featuredTeam().map((person, index) => <TeamCard key={index} person={person} short />)}
         </ul>
       </section>
 

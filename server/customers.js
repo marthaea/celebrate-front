@@ -15,6 +15,7 @@
 import crypto from "node:crypto";
 import { claimsOf, makeToken, same, tooManyAttempts, verifyHuman } from "./auth.js";
 import { read, write } from "./store.js";
+import { loadBookingsRaw, saveBookings } from "./core.js";
 
 const SESSION_DAYS = 30;
 export const SIMULATED_SMS = !process.env.SMS_PROVIDER;
@@ -156,6 +157,35 @@ export function addCustomers(app, { safe, loadBookings, asAdmin }) {
 
   app.get("/api/me/appointments", signedIn(async (req, res) => {
     res.json((await read("appointments", [])).filter((v) => v.customerId === req.customer.id));
+  }));
+
+  // The host's own data, as one file (their right of access under the Data Protection and Privacy Act).
+  app.get("/api/me/data", signedIn(async (req, res) => {
+    const id = req.customer.id;
+    const [bookings, appointments, notes, reviews] = await Promise.all([loadBookings(), read("appointments", []), read("notes", []), read("reviews", [])]);
+    const theirs = bookings.filter((b) => b.customerId === id);
+    const ids = new Set(theirs.map((b) => b.id));
+    res.json({
+      exportedAt: new Date().toISOString(),
+      account: publicCustomer(req.customer),
+      bookings: theirs,
+      appointments: appointments.filter((v) => v.customerId === id),
+      notifications: notes.filter((n) => n.to === `customer:${id}`),
+      reviews: reviews.filter((r) => ids.has(r.bookingId)),
+    });
+  }));
+
+  // Deleting the account. Bookings stay for the vendors' and Celebrate's records, without the host's
+  // name, and nobody can open them as that host again.
+  app.post("/api/me/delete", signedIn(async (req, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ error: "Confirm that you want to delete your account." });
+    const id = req.customer.id;
+    const gone = "Deleted account";
+    await write("customers", (await loadCustomers()).filter((c) => c.id !== id));
+    await saveBookings((await loadBookingsRaw()).map((b) => (b.customerId === id ? { ...b, customer: gone } : b)));
+    await write("appointments", (await read("appointments", [])).map((v) => (v.customerId === id ? { ...v, name: gone } : v)));
+    await write("notes", (await read("notes", [])).filter((n) => n.to !== `customer:${id}`));
+    res.json({ ok: true });
   }));
 
   // ---- Admin: customer accounts

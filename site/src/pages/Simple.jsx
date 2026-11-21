@@ -202,7 +202,74 @@ function Profile() {
       </form>
       <p className="quiet">To change your phone number, contact Celebrate. You accepted the terms on {customer.termsAccepted ? new Date(customer.termsAccepted.at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "signing up"}.</p>
       <button className="button" onClick={signOut}>Sign out</button>
+      <YourData onDeleted={signOut} />
     </>
+  );
+}
+
+/** The host's rights over their data: a copy of everything, or deleting the account. */
+function YourData({ onDeleted }) {
+  const [busy, setBusy] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState("");
+
+  const download = async () => {
+    setError("");
+    setBusy("download");
+    try {
+      const data = await more.myData();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      link.download = `celebrate-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy("");
+  };
+
+  const remove = async (event) => {
+    event.preventDefault();
+    setError("");
+    setBusy("delete");
+    try {
+      await more.deleteMe();
+      onDeleted();
+    } catch (err) {
+      setError(err.message);
+      setBusy("");
+    }
+  };
+
+  return (
+    <section className="your-data">
+      <h2 className="caps">Your data</h2>
+      <p className="quiet">
+        Download a copy of everything Celebrate holds about you, or delete your account. See the <Link to="/privacy" className="link-quiet">privacy notice</Link> for how your data is used.
+      </p>
+      <ErrorNote>{error}</ErrorNote>
+      <div className="vendor-actions">
+        <button className="button outline" onClick={download} disabled={Boolean(busy)}>{busy === "download" ? "Preparing…" : "Download my data"}</button>
+        {!asking && <button className="button outline danger" onClick={() => setAsking(true)} disabled={Boolean(busy)}>Delete my account</button>}
+      </div>
+      {asking && (
+        <form className="form delete-box" onSubmit={remove}>
+          <p><strong>This cannot be undone.</strong> Your account is closed and you are signed out. Download your data first if you want a copy.</p>
+          <label className="field">
+            <span className="caps">Type DELETE to confirm</span>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          </label>
+          <div className="vendor-actions">
+            <button className="button danger" disabled={typed.trim().toUpperCase() !== "DELETE" || Boolean(busy)}>{busy === "delete" ? "Deleting…" : "Delete my account"}</button>
+            <button type="button" className="button outline" onClick={() => { setAsking(false); setTyped(""); }}>Keep my account</button>
+          </div>
+        </form>
+      )}
+    </section>
   );
 }
 
