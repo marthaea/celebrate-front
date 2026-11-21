@@ -16,6 +16,30 @@
   status = 200
   force = true
 
+# Let browsers keep files instead of re-checking each one on every visit (each check costs about
+# a second from Uganda). Build files have a fingerprint in their name, so they never change.
+# Stock photos are named by their Pexels number, so a new photo gets a new name. Team photos
+# can be replaced under the same name, so they are only kept for a day.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/photos/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000, stale-while-revalidate=86400"
+
+[[headers]]
+  for = "/team/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
 # /sitemap.xml and /robots.txt are made by the edge function netlify/edge-functions/sitemap.js,
 # so their addresses use this site's own domain and include the blog, about and team pages.
 

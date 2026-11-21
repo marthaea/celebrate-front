@@ -6,6 +6,10 @@
     <meta name="theme-color" content="#d42b2b" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // The home page opens on two large photos: start fetching them now rather than after the app's script has loaded.
+      if (location.pathname === "/") ["27060723", "2402239"].forEach(function (id) { var l = document.createElement("link"); l.rel = "preload"; l.as = "image"; l.href = "/photos/" + id + ".jpg"; l.fetchPriority = "high"; document.head.appendChild(l); });
+    </script>
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <!-- Search and link-preview tags. Replaced per page when served (netlify/edge-functions/seo.js, server/index.js). -->
     <!-- seo:start -->
